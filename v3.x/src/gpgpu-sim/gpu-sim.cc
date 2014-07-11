@@ -415,7 +415,7 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
                           &g_visualizer_enabled, "Turn on visualizer output (1=On, 0=Off)",
                           "1");
    option_parser_register(opp, "-visualizer_outputfile", OPT_CSTR, 
-                          &g_visualizer_filename, "Specifies the output log file for visualizer",
+                          &g_visualizer_filename, "Specifies the output log filerfor visualizer",
                           NULL);
    option_parser_register(opp, "-visualizer_zlevel", OPT_INT32,
                           &g_visualizer_zlevel, "Compression level of the visualizer output log (0=no comp, 9=highest)",
@@ -435,6 +435,11 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
                           &Trace::sampling_memory_partition, "The memory partition which is printed using MEMPART_DPRINTF. Default -1 (i.e. all)",
                           "-1");
    ptx_file_line_stats_options(opp);
+
+    option_parser_register(opp, "-dump_vtl_addr_trace", OPT_BOOL,
+                         &dump_vtl_addr_trace, "Enable dump virtual address trace",
+                         "0");
+
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -591,6 +596,10 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     *active_sms=0;
 
     last_liveness_message_time = 0;
+
+    if(m_config.dump_vtl_addr_trace == 1){
+       f_vtl_dump = fopen("virtual_address_dump.txt","w");
+    }
 }
 
 int gpgpu_sim::shared_mem_size() const

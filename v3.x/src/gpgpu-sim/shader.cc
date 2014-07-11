@@ -1153,7 +1153,7 @@ void shader_core_ctx::execute()
         m_fu[n]->active_lanes_in_pipeline();
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
         register_set& issue_inst = m_pipeline_reg[ issue_port ];
-	warp_inst_t** ready_reg = issue_inst.get_ready();
+        warp_inst_t** ready_reg = issue_inst.get_ready();
         if( issue_inst.has_ready() && m_fu[n]->can_issue( **ready_reg ) ) {
             bool schedule_wb_now = !m_fu[n]->stallable();
             int resbus = -1;
@@ -1300,6 +1300,11 @@ ldst_unit::process_cache_access( cache_t* cache,
     if ( status == HIT ) {
         assert( !read_sent );
         inst.accessq_pop_back();
+        if(m_core->get_gpu()->f_vtl_dump != NULL){
+           if(mf->get_inst().space.is_global()==1){
+                fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n",address, mf->get_timestamp() );
+           }
+        }
         if ( inst.is_load() ) {
             for ( unsigned r=0; r < 4; r++)
                 if (inst.out[r] > 0)
@@ -1316,6 +1321,11 @@ ldst_unit::process_cache_access( cache_t* cache,
         assert( status == MISS || status == HIT_RESERVED );
         //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
         inst.accessq_pop_back();
+        if(m_core->get_gpu()->f_vtl_dump != NULL){
+           if(mf->get_inst().space.is_global()==1){
+                fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n", address, mf->get_timestamp() );
+           }
+        }
     }
     if( !inst.accessq_empty() )
         result = BK_CONF;
@@ -1401,6 +1411,11 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
            mem_fetch *mf = m_mf_allocator->alloc(inst,access);
            m_icnt->push(mf);
            inst.accessq_pop_back();
+           if(m_core->get_gpu()->f_vtl_dump != NULL){
+              if(mf->get_inst().space.is_global()==1){
+                   fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n", mf->get_addr(), mf->get_timestamp() );
+              }
+           }
            //inst.clear_active( access.get_warp_mask() );
            if( inst.is_load() ) { 
               for( unsigned r=0; r < 4; r++) 

@@ -355,7 +355,8 @@ private:
     int gpu_stat_sample_freq;
     int gpu_runtime_stat_flag;
 
-
+    //yk: dump virtual address trace
+    bool dump_vtl_addr_trace;
 
     unsigned long long liveness_message_freq; 
 
@@ -495,6 +496,8 @@ public:
    bool has_special_cache_config(std::string kernel_name);
    void change_cache_config(FuncCache cache_config);
    void set_cache_config(std::string kernel_name);
+
+   FILE* f_vtl_dump;
 
 };
 

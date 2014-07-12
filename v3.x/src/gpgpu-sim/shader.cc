@@ -1302,7 +1302,7 @@ ldst_unit::process_cache_access( cache_t* cache,
         inst.accessq_pop_back();
         if(m_core->get_gpu()->f_vtl_dump != NULL){
            if(mf->get_inst().space.is_global()==1){
-                fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n",address, mf->get_timestamp() );
+                fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d\n",address, mf->get_timestamp() );
            }
         }
         if ( inst.is_load() ) {
@@ -1323,7 +1323,7 @@ ldst_unit::process_cache_access( cache_t* cache,
         inst.accessq_pop_back();
         if(m_core->get_gpu()->f_vtl_dump != NULL){
            if(mf->get_inst().space.is_global()==1){
-                fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n", address, mf->get_timestamp() );
+                fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d\n", address, mf->get_timestamp() );
            }
         }
     }
@@ -1413,7 +1413,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
            inst.accessq_pop_back();
            if(m_core->get_gpu()->f_vtl_dump != NULL){
               if(mf->get_inst().space.is_global()==1){
-                   fprintf(m_core->get_gpu()->f_vtl_dump, "%llx %d\n", mf->get_addr(), mf->get_timestamp() );
+                   fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d\n", mf->get_addr(), mf->get_timestamp() );
               }
            }
            //inst.clear_active( access.get_warp_mask() );

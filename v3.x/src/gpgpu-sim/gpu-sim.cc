@@ -439,7 +439,9 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
     option_parser_register(opp, "-dump_vtl_addr_trace", OPT_BOOL,
                          &dump_vtl_addr_trace, "Enable dump virtual address trace",
                          "0");
-
+    option_parser_register(opp, "-virtual_addr_feature", OPT_BOOL,
+                         &virtual_address_feature, "Enable virtual address system support",
+                         "0");
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -599,6 +601,15 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
     if(m_config.dump_vtl_addr_trace == 1){
        f_vtl_dump = fopen("virtual_address_dump.txt","w");
+    }
+    else{
+       f_vtl_dump = NULL;
+    }
+    if(m_config.virtual_address_feature == 1){
+        virtual_address_feature = TRUE;
+    }
+    else{
+        virtual_address_feature = FALSE;
     }
 }
 

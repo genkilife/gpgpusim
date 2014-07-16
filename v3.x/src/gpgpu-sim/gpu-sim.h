@@ -357,6 +357,8 @@ private:
 
     //yk: dump virtual address trace
     bool dump_vtl_addr_trace;
+    //yk: configure virtual address system
+    bool virtual_address_feature;
 
     unsigned long long liveness_message_freq; 
 
@@ -498,6 +500,7 @@ public:
    void set_cache_config(std::string kernel_name);
 
    FILE* f_vtl_dump;
+   bool virtual_address_feature;
 
 };
 

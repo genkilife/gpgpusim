@@ -668,14 +668,14 @@ void shader_core_ctx::fetch()
         delete mf;
     }
 }
-
+//YK: memory generation should be sent into MMU
 void shader_core_ctx::func_exec_inst( warp_inst_t &inst )
 {
     execute_warp_inst_t(inst);
     if( inst.is_load() || inst.is_store() )
         inst.generate_mem_accesses();
 }
-
+//YK: change the issue behavior to MMU unit if it is memory inst
 void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t* next_inst, const active_mask_t &active_mask, unsigned warp_id )
 {
     warp_inst_t** pipe_reg = pipe_reg_set.get_free();

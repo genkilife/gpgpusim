@@ -1148,9 +1148,13 @@ void shader_core_ctx::execute()
 	}
     for( unsigned n=0; n < m_num_function_units; n++ ) {
         unsigned multiplier = m_fu[n]->clock_multiplier();
+        //yk: run cycle of each function unit
         for( unsigned c=0; c < multiplier; c++ ) 
             m_fu[n]->cycle();
+        //yk: check active lanes for statistic
         m_fu[n]->active_lanes_in_pipeline();
+
+        //yk: Following is issue code
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
         register_set& issue_inst = m_pipeline_reg[ issue_port ];
         warp_inst_t** ready_reg = issue_inst.get_ready();
@@ -1162,6 +1166,7 @@ void shader_core_ctx::execute()
                 m_result_bus[resbus]->set( (*ready_reg)->latency );
                 m_fu[n]->issue( issue_inst );
             } else if( !schedule_wb_now ) {
+                //yk: ld/st unit use this issue
                 m_fu[n]->issue( issue_inst );
             } else {
                 // stall issue (cannot reserve result bus)
@@ -1644,6 +1649,10 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
           tpc );
 }
 
+//yk: modify the flow of ld/st unit
+//yk: possible method:
+//yk: route the issue to MMU unit
+//yk: wait the response and continue the original flow
 void ldst_unit:: issue( register_set &reg_set )
 {
 	warp_inst_t* inst = *(reg_set.get_ready());

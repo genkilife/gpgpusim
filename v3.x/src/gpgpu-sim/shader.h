@@ -1107,14 +1107,8 @@ public:
     virtual void active_lanes_in_pipeline();
     virtual bool stallable() const { return true; }
     bool response_buffer_full() const;
-    void print(FILE *fout) const;
-    void print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses );
-    void get_cache_stats(unsigned &read_accesses, unsigned &write_accesses, unsigned &read_misses, unsigned &write_misses, unsigned cache_type);
-    void get_cache_stats(cache_stats &cs);
 
     void get_L1D_sub_stats(struct cache_sub_stats &css) const;
-    void get_L1C_sub_stats(struct cache_sub_stats &css) const;
-    void get_L1T_sub_stats(struct cache_sub_stats &css) const;
 
 protected:
     mmu_unit( mem_fetch_interface *icnt,
@@ -1140,9 +1134,6 @@ protected:
                unsigned tpc );
 
 protected:
-   bool shared_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
-   bool constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
-   bool texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool memory_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
 
    virtual mem_stage_stall_type process_cache_access( cache_t* cache,
@@ -1160,8 +1151,6 @@ protected:
    unsigned m_sid;
    unsigned m_tpc;
 
-   tex_cache *m_L1T; // texture cache
-   read_only_cache *m_L1C; // constant cache
    l1_cache *m_L1D; // data cache
    std::map<unsigned/*warp_id*/, std::map<unsigned/*regnum*/,unsigned/*count*/> > m_pending_writes;
    std::list<mem_fetch*> m_response_fifo;

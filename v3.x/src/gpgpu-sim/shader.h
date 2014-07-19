@@ -1294,7 +1294,9 @@ enum pipeline_stage_name_t {
     OC_EX_SFU,
     OC_EX_MEM,
     EX_WB,
-    N_PIPELINE_STAGES 
+    N_PIPELINE_STAGES,
+    OC_EX_MMU,
+    OC_MMU_MEM
 };
 
 const char* const pipeline_stage_name_decode[] = {
@@ -1305,7 +1307,9 @@ const char* const pipeline_stage_name_decode[] = {
     "OC_EX_SFU",
     "OC_EX_MEM",
     "EX_WB",
-    "N_PIPELINE_STAGES" 
+    "N_PIPELINE_STAGES",
+    "OC_EX_MMU",
+    "OC_MMU_MEM"
 };
 
 struct shader_core_config : public core_config

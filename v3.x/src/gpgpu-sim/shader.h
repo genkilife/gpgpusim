@@ -1412,6 +1412,8 @@ struct shader_core_config : public core_config
     int gpgpu_num_sp_units;
     int gpgpu_num_sfu_units;
     int gpgpu_num_mem_units;
+    //yk: add mmu units
+    int gpgpu_num_mmu_units;
 
     //Shader core resources
     unsigned gpgpu_shader_registers;

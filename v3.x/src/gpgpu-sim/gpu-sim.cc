@@ -193,6 +193,9 @@ void memory_config::reg_options(class OptionParser * opp)
                      "30");
 
     m_address_mapping.addrdec_setoption(opp);
+
+
+
 }
 
 void shader_core_config::reg_options(class OptionParser * opp)
@@ -357,12 +360,20 @@ void shader_core_config::reg_options(class OptionParser * opp)
     option_parser_register(opp, "-gpgpu_num_mem_units", OPT_INT32, &gpgpu_num_mem_units,
                             "Number if ldst units (default=1) WARNING: not hooked up to anything",
                              "1");
+   //yk: add mmu unit
+    option_parser_register(opp, "-gpgpu_num_mmu_units", OPT_INT32, &gpgpu_num_mmu_units,
+                            "Number if mmu units (default=0) ",
+                             "0");
     option_parser_register(opp, "-gpgpu_scheduler", OPT_CSTR, &gpgpu_scheduler_string,
                                 "Scheduler configuration: < lrr | gto | two_level_active > "
                                 "If two_level_active:<num_active_warps>:<inner_prioritization>:<outer_prioritization>"
                                 "For complete list of prioritization values see shader.h enum scheduler_prioritization_type"
                                 "Default: gto",
                                  "gto");
+    option_parser_register(opp, "-gpgpu_mmu_cache:tlb", OPT_CSTR, &m_L1D_config.m_config_string,
+                   "per-shader L1 data cache config "
+                   " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq> | none}",
+                   "none" );
 }
 
 void gpgpu_sim_config::reg_options(option_parser_t opp)

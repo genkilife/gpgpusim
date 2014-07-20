@@ -263,7 +263,7 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     m_operand_collector.init( m_config->gpgpu_num_reg_banks, this );
     
     // execute
-    m_num_function_units = m_config->gpgpu_num_sp_units + m_config->gpgpu_num_sfu_units + 1; // sp_unit, sfu, ldst_unit
+    m_num_function_units = m_config->gpgpu_num_sp_units + m_config->gpgpu_num_sfu_units + m_config->gpgpu_num_mmu_units + 1; // sp_unit, sfu, ldst_unit
     //m_dispatch_port = new enum pipeline_stage_name_t[ m_num_function_units ];
     //m_issue_port = new enum pipeline_stage_name_t[ m_num_function_units ];
     
@@ -1158,6 +1158,9 @@ void shader_core_ctx::execute()
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
         register_set& issue_inst = m_pipeline_reg[ issue_port ];
         warp_inst_t** ready_reg = issue_inst.get_ready();
+
+        //yk: mmu unit should consider the can_issue problem
+        //yk: if use mmu, should consider the mmu capacity
         if( issue_inst.has_ready() && m_fu[n]->can_issue( **ready_reg ) ) {
             bool schedule_wb_now = !m_fu[n]->stallable();
             int resbus = -1;
@@ -2150,7 +2153,11 @@ void ldst_unit:: issue( register_set &reg_set )
 	inst->op_pipe=MEM__OP;
 	// stat collection
 	m_core->mem_instruction_stats(*inst);
-	m_core->incmem_stat(m_core->get_config()->warp_size,1);
+    m_core->incmem_stat(m_core->get_config()->warp_size,1);
+
+
+    //0721: if use mmu, call mmu issue code
+
 	pipelined_simd_unit::issue(reg_set);
 }
 
@@ -2280,7 +2287,8 @@ void ldst_unit::cycle()
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
        if( m_pipeline_reg[stage]->empty() && !m_pipeline_reg[stage+1]->empty() )
             move_warp(m_pipeline_reg[stage], m_pipeline_reg[stage+1]);
-
+   //yk: stage 1
+   //yk: check memory load response
    if( !m_response_fifo.empty() ) {
        mem_fetch *mf = m_response_fifo.front();
        if (mf->istexture()) {
@@ -2325,10 +2333,16 @@ void ldst_unit::cycle()
        }
    }
 
+   //yk: stage 2
+   //yk: run one cycle of the cache in ld/st unit
+   //yk: may add mmu cache here
    m_L1T->cycle();
    m_L1C->cycle();
    if( m_L1D ) m_L1D->cycle();
 
+   //yk: stage 3
+   //yk: fetch instruction from dispatch port
+   //yk: question: waiting the instruction or issue others??
    warp_inst_t &pipe_reg = *m_dispatch_reg;
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
@@ -2337,6 +2351,12 @@ void ldst_unit::cycle()
    done &= constant_cycle(pipe_reg, rc_fail, type);
    done &= texture_cycle(pipe_reg, rc_fail, type);
    done &= memory_cycle(pipe_reg, rc_fail, type);
+
+
+   if(........){
+      done &= mmu_cycle();
+   }
+
    m_mem_rc = rc_fail;
 
    if (!done) { // log stall types and return

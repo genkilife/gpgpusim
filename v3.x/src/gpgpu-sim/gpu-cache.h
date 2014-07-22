@@ -295,6 +295,9 @@ protected:
     friend class data_cache;
     friend class l1_cache;
     friend class l2_cache;
+    //yk:07/22
+    friend class mmu_tlb_cache;
+    friend class mmu_l1_cache;
 };
 
 
@@ -1133,5 +1136,72 @@ private:
 
     extra_mf_fields_lookup m_extra_mf_fields;
 };
+
+/// This is meant to model the first level data cache in Fermi.
+/// It is write-evict (global) or write-back (local) at
+/// the granularity of individual blocks
+/// (the policy used in fermi according to the CUDA manual)
+
+
+//yk: borrow l1 model and modify it into tlb module
+class mmu_tlb_cache: public data_cache {
+public:
+    mmu_tlb_cache(const char *name, cache_config &config,
+            int core_id, int type_id, mem_fetch_interface *memport,
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC){}
+
+    virtual ~mmu_tlb_cache(){}
+
+    virtual enum cache_request_status
+        access( new_addr_type addr,
+                mem_fetch *mf,
+                unsigned time,
+                std::list<cache_event> &events );
+
+protected:
+    mmu_tlb_cache( const char *name,
+              cache_config &config,
+              int core_id,
+              int type_id,
+              mem_fetch_interface *memport,
+              mem_fetch_allocator *mfcreator,
+              enum mem_fetch_status status,
+              tag_array* new_tag_array )
+    : data_cache( name,
+                  config,
+                  core_id,type_id,memport,mfcreator,status, new_tag_array, L1_WR_ALLOC_R, L1_WRBK_ACC ){}
+
+};
+class mmu_l1_cache: public data_cache {
+public:
+    mmu_l1_cache(const char *name, cache_config &config,
+            int core_id, int type_id, mem_fetch_interface *memport,
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC){}
+
+    virtual ~mmu_l1_cache(){}
+
+    virtual enum cache_request_status
+        access( new_addr_type addr,
+                mem_fetch *mf,
+                unsigned time,
+                std::list<cache_event> &events );
+
+protected:
+    mmu_l1_cache( const char *name,
+              cache_config &config,
+              int core_id,
+              int type_id,
+              mem_fetch_interface *memport,
+              mem_fetch_allocator *mfcreator,
+              enum mem_fetch_status status,
+              tag_array* new_tag_array )
+    : data_cache( name,
+                  config,
+                  core_id,type_id,memport,mfcreator,status, new_tag_array, L1_WR_ALLOC_R, L1_WRBK_ACC ){}
+
+};
+
 
 #endif

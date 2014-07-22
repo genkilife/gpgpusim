@@ -1248,6 +1248,9 @@ protected:
    bool constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool memory_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
+   bool mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
+   bool mmu_page_walk_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
+   bool mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
 
    virtual mem_stage_stall_type process_cache_access( cache_t* cache,
                                                       new_addr_type address,
@@ -1267,6 +1270,11 @@ protected:
    tex_cache *m_L1T; // texture cache
    read_only_cache *m_L1C; // constant cache
    l1_cache *m_L1D; // data cache
+
+   //yk: add mmu's TLB & L1 cache
+   mmu_tlb_cache *m_mmuTLB;
+   mmu_l1_cache  *m_mmuL1D;
+
    std::map<unsigned/*warp_id*/, std::map<unsigned/*regnum*/,unsigned/*count*/> > m_pending_writes;
    std::list<mem_fetch*> m_response_fifo;
    opndcoll_rfu_t *m_operand_collector;
@@ -1412,8 +1420,6 @@ struct shader_core_config : public core_config
     int gpgpu_num_sp_units;
     int gpgpu_num_sfu_units;
     int gpgpu_num_mem_units;
-    //yk: add mmu units
-    int gpgpu_num_mmu_units;
 
     //Shader core resources
     unsigned gpgpu_shader_registers;
@@ -1434,6 +1440,11 @@ struct shader_core_config : public core_config
     int simt_core_sim_order; 
     
     unsigned mem2device(unsigned memid) const { return memid + n_simt_clusters; }
+
+    //yk: add mmu feature
+    bool gpgpu_mmu;
+    mutable cache_config m_mmu_TLB_config;
+    mutable cache_config m_mmu_L1D_config;
 };
 
 struct shader_core_stats_pod {

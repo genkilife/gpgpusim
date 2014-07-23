@@ -109,6 +109,12 @@ void mem_fetch::do_atomic()
     m_inst.do_atomic( m_access.get_warp_mask() );
 }
 
+bool mem_fetch::ispagewalk()const
+{
+    if( m_inst.empty() ) return false;
+    return m_access.is_pagewalk();
+}
+
 bool mem_fetch::istexture() const
 {
     if( m_inst.empty() ) return false;

@@ -1473,76 +1473,11 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    }
    return inst.accessq_empty(); 
 }
-/*
-bool ldst_unit::mmu_exec_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
+
+bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
 
-   assert(m_core->get_config()->gpgpu_mmu == true);
-   //yk: if use mmu, should consider that accessq should be pushed translated memory address
-   if( inst.empty() ||
-       ((inst.space.get_type() != global_space) &&
-        (inst.space.get_type() != local_space) &&
-        (inst.space.get_type() != param_space_local)) )
-       return true;
-   if( inst.active_count() == 0 )
-       return true;
-   assert( !inst.accessq_empty() );
-   mem_stage_stall_type stall_cond = NO_RC_FAIL;
-   const mem_access_t &access = inst.accessq_back();
-
-   bool bypassL1D = false;
-   if ( CACHE_GLOBAL == inst.cache_op || (m_L1D == NULL) ) {
-       bypassL1D = true;
-   } else if (inst.space.is_global()) { // global memory access
-       // skip L1 cache if the option is enabled
-       if (m_core->get_config()->gmem_skip_L1D)
-           bypassL1D = true;
-   }
-
-   if( bypassL1D ) {
-       // bypass L1 cache
-       unsigned control_size = inst.is_store() ? WRITE_PACKET_SIZE : READ_PACKET_SIZE;
-       unsigned size = access.get_size() + control_size;
-       //yk: check icnt capacity
-       if( m_icnt->full(size, inst.is_store() || inst.isatomic()) ) {
-           stall_cond = ICNT_RC_FAIL;
-       } else {
-           //yk: generate memory access request to lower level
-           mem_fetch *mf = m_mf_allocator->alloc(inst,access);
-           m_icnt->push(mf);
-           inst.accessq_pop_back();
-           if(m_core->get_gpu()->f_vtl_dump != NULL){
-              if(mf->get_inst().space.is_global()==1){
-                  fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
-              }
-           }
-           //inst.clear_active( access.get_warp_mask() );
-           if( inst.is_load() ) {
-              for( unsigned r=0; r < 4; r++)
-                  if(inst.out[r] > 0)
-                      assert( m_pending_writes[inst.warp_id()][inst.out[r]] > 0 );
-           } else if( inst.is_store() )
-              m_core->inc_store_req( inst.warp_id() );
-       }
-   } else {
-       assert( CACHE_UNDEFINED != inst.cache_op );
-       stall_cond = process_memory_access_queue(m_L1D,inst);
-   }
-   if( !inst.accessq_empty() )
-       //yk: guess the function of coalesce stall
-       //yk: the address issued by the warp instruction will be coalesced into few memory accesses
-       //yk: the ldst_unit can only process one request per cycle. Have to use more cycles to process this instruction
-       stall_cond = COAL_STALL;
-   if (stall_cond != NO_RC_FAIL) {
-      stall_reason = stall_cond;
-      bool iswrite = inst.is_store();
-      if (inst.space.is_local())
-         access_type = (iswrite)?L_MEM_ST:L_MEM_LD;
-      else
-         access_type = (iswrite)?G_MEM_ST:G_MEM_LD;
-   }
-   return inst.accessq_empty();
-}*/
+}
 
 bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
@@ -1561,7 +1496,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
 
 
    // the memory access
-   stall_cond = process_memory_access_queue(m_L1D,inst);
+   stall_cond = process_memory_access_queue(m_mmuTLB,inst);
 
    //yk: stall_reason & access_type for statistics
    if( !inst.accessq_empty() )
@@ -1574,6 +1509,10 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
    return inst.accessq_empty();
 }
 
+bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
+{
+
+}
 
 bool ldst_unit::response_buffer_full() const
 {
@@ -1931,6 +1870,11 @@ void ldst_unit::cycle()
                m_L1C->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
                m_response_fifo.pop_front(); 
            }
+       } else if(mf->ispagewalk()){
+
+
+
+
        } else {
     	   if( mf->get_type() == WRITE_ACK || ( m_config->gpgpu_perfect_mem && mf->get_is_write() )) {
                m_core->store_ack(mf);

@@ -1511,7 +1511,31 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
 
 bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
+    if( inst.empty() ||
+        ((inst.space.get_type() != global_space) &&
+         (inst.space.get_type() != local_space) &&
+         (inst.space.get_type() != param_space_local)) )
+        return true;
+    if( inst.active_count() == 0 )
+        return true;
+    assert( !inst.accessq_empty() );
+    assert(m_core->get_config()->gpgpu_mmu == true);
 
+    //yk: check whether coalescing finished
+    if(inst.get_mem_coalesced()==true){
+         // coalescing has finished
+         return true;
+    }
+
+
+    // start doing coalescing
+
+    assert( CACHE_UNDEFINED != inst.cache_op );
+
+    bool finish_coalesce = false;
+    finish_coalesce = inst.generate_vtl_mem_accesses();
+
+    return finish_coalesce;
 }
 
 bool ldst_unit::response_buffer_full() const

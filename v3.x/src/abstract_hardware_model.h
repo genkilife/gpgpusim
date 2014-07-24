@@ -796,6 +796,7 @@ public:
         m_cache_hit=false;
         m_is_printf=false;
         m_mem_tranlstion_created = false;
+        m_mem_coalesced = false;
     }
     virtual ~warp_inst_t(){
     }
@@ -857,8 +858,8 @@ public:
     };
 
     void generate_mem_accesses();
-    void generate_vtl_mem_accesses();
-    void memory_vtl_generate_accesses(bool is_write, mem_access_type access_type);
+    bool generate_vtl_mem_accesses();
+    void memory_vtl_generate_accesses();
     void memory_coalescing_arch_13( bool is_write, mem_access_type access_type );
     void memory_coalescing_arch_13_atomic( bool is_write, mem_access_type access_type );
     void memory_coalescing_arch_13_reduce_and_send( bool is_write, mem_access_type access_type, const transaction_info &info, new_addr_type addr, unsigned segment_size );
@@ -937,7 +938,9 @@ public:
     void print( FILE *fout ) const;
     unsigned get_uid() const { return m_uid; }
     bool get_mem_tranlstion_created(){ return m_mem_tranlstion_created;}
-
+    bool get_mem_coalesced(){return m_mem_coalesced;}
+    bool set_mem_tranlstion_created(bool flag){ m_mem_tranlstion_created = flag;}
+    bool set_mem_coalesced(bool flag){ m_mem_coalesced = flag;}
 protected:
 
     unsigned m_uid;
@@ -969,6 +972,7 @@ protected:
     //yk: add mmu feature
     bool m_mem_tranlstion_created;
     std::list<mem_access_t> m_translationq;
+    bool m_mem_coalesced;
 
     static unsigned sm_next_uid;
 };

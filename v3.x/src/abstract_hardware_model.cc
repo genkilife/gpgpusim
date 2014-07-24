@@ -336,38 +336,40 @@ void warp_inst_t::generate_mem_accesses()
     }
     m_mem_accesses_created=true;
     m_mem_tranlstion_created = false;
+    m_mem_coalesced = false;
 }
-/*
-void warp_inst_t::generate_vtl_mem_accesses()
+bool warp_inst_t::generate_vtl_mem_accesses()
 {
-    if( empty() || op == MEMORY_BARRIER_OP || m_mem_accesses_created )
-        return;
+    if( empty() || op == MEMORY_BARRIER_OP || m_mem_coalesced )
+        return true;
     if ( !((op == LOAD_OP) || (op == STORE_OP)) )
-        return;
+        return true;
     if( m_warp_active_mask.count() == 0 )
-        return; // predicated off
+        return true; // predicated off
 
     const size_t starting_queue_size = m_accessq.size();
 
     assert( (is_load() || is_store()) && (space.get_type()==global_space) );
     assert( m_per_scalar_thread_valid ); // need address information per thread
 
-    bool is_write = is_store();
-
-    mem_access_type access_type;
-    access_type = is_write? GLOBAL_ACC_W: GLOBAL_ACC_R;
-
+    bool is_write = false;
+    mem_access_type access_type = is_write? GLOBAL_ACC_W: GLOBAL_ACC_R;
     memory_vtl_generate_accesses(is_write, access_type);
 
-    if ( space.get_type() == global_space ) {
+    /*if ( space.get_type() == global_space ) {
         ptx_file_line_stats_add_uncoalesced_gmem( pc, m_accessq.size() - starting_queue_size );
-    }
-    m_mem_accesses_created=true;
+    }*/
+    m_mem_coalesced=true;
 
     return;
 }
+
 void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type access_type )
 {
+    // dump all
+
+
+
     // see the CUDA manual where it discusses coalescing rules before reading this
     unsigned segment_size = 0;
     unsigned warp_parts = m_config->mem_warp_parts;
@@ -418,7 +420,7 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
 
         }
     }
-}*/
+}
 
 
 void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type access_type )

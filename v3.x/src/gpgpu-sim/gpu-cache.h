@@ -569,6 +569,7 @@ public:
     bool access_ready() const {return m_mshrs.access_ready();}
     /// Pop next ready access (does not include accesses that "HIT")
     mem_fetch *next_access(){return m_mshrs.next_access();}
+    //yk: should be used in TLB to do context switch
     // flash invalidate all entries in cache
     void flush(){m_tag_array->flush();}
     void print(FILE *fp, unsigned &accesses, unsigned &misses) const;
@@ -1158,20 +1159,6 @@ public:
                 mem_fetch *mf,
                 unsigned time,
                 std::list<cache_event> &events );
-
-protected:
-    mmu_tlb_cache( const char *name,
-              cache_config &config,
-              int core_id,
-              int type_id,
-              mem_fetch_interface *memport,
-              mem_fetch_allocator *mfcreator,
-              enum mem_fetch_status status,
-              tag_array* new_tag_array )
-    : data_cache( name,
-                  config,
-                  core_id,type_id,memport,mfcreator,status, new_tag_array, L1_WR_ALLOC_R, L1_WRBK_ACC ){}
-
 };
 class mmu_l1_cache: public data_cache {
 public:
@@ -1187,20 +1174,6 @@ public:
                 mem_fetch *mf,
                 unsigned time,
                 std::list<cache_event> &events );
-
-protected:
-    mmu_l1_cache( const char *name,
-              cache_config &config,
-              int core_id,
-              int type_id,
-              mem_fetch_interface *memport,
-              mem_fetch_allocator *mfcreator,
-              enum mem_fetch_status status,
-              tag_array* new_tag_array )
-    : data_cache( name,
-                  config,
-                  core_id,type_id,memport,mfcreator,status, new_tag_array, L1_WR_ALLOC_R, L1_WRBK_ACC ){}
-
 };
 
 

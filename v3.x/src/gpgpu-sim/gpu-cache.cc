@@ -1183,4 +1183,21 @@ void tex_cache::display_state( FILE *fp ) const
     }
 }
 /******************************************************************************************************************************************/
+enum cache_request_status
+mmu_tlb_cache::access( new_addr_type addr,
+                  mem_fetch *mf,
+                  unsigned time,
+                  std::list<cache_event> &events )
+{
+    return data_cache::access( addr, mf, time, events );
+}
 
+
+enum cache_request_status
+mmu_l1_cache::access( new_addr_type addr,
+                  mem_fetch *mf,
+                  unsigned time,
+                  std::list<cache_event> &events )
+{
+    return data_cache::access( addr, mf, time, events );
+}

@@ -1400,6 +1400,8 @@ bool ldst_unit::texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail,
    return inst.accessq_empty(); //done if empty.
 }
 
+//yk: memory cycle here should be independent of memory translation
+//yk: It only handles the memory access in accessq
 bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
    if( inst.empty() || 
@@ -1477,8 +1479,12 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
 bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
 
+    return false;
 }
 
+//yk: translation stage
+//yk: This stage refer to mem stage.
+//yk: It send virtual address to TLB/cache to find weather the physical address has been cached.
 bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
    //yk: this function unit should do address translation
@@ -1532,10 +1538,7 @@ bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stal
 
     assert( CACHE_UNDEFINED != inst.cache_op );
 
-    bool finish_coalesce = false;
-    finish_coalesce = inst.generate_vtl_mem_accesses();
-
-    return finish_coalesce;
+    return inst.generate_vtl_mem_accesses();
 }
 
 bool ldst_unit::response_buffer_full() const
@@ -1712,6 +1715,18 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                               m_icnt,
                               m_mf_allocator,
                               IN_L1D_MISS_QUEUE );
+    }
+    //yk: add mmu TLB/cache initialization
+    if( !m_config->m_mmu_TLB_config.disabled() ){
+         char TLB_name[STRSIZE];
+         snprintf(TLB_name, STRSIZE, "TLB_%03d", m_sid);
+         m_mmuTLB = new mmu_tlb_cache( TLB_name,
+                                       m_config->m_mmu_TLB_config,
+                                       m_sid,
+                                       get_shader_normal_cache_id(),
+                                       m_icnt,
+                                       m_mf_allocator,
+                                       IN_L1D_MISS_QUEUE );
     }
 }
 

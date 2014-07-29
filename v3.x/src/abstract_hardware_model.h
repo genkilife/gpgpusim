@@ -924,6 +924,12 @@ public:
     const mem_access_t &accessq_back() { return m_accessq.back(); }
     void accessq_pop_back() { m_accessq.pop_back(); }
 
+    //yk: add translation queue function
+    bool translationq_empty() const { return m_translationq.empty(); }
+    unsigned translationq_count() const { return m_translationq.size(); }
+    const mem_access_t &translationq_back() { return m_translationq.back(); }
+    void translationq_pop_back() { m_translationq.pop_back(); }
+
     bool dispatch_delay()
     { 
         if( cycles > 0 ) 

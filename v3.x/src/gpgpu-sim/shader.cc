@@ -1479,6 +1479,10 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
 bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
 
+
+
+
+
     return false;
 }
 
@@ -1497,22 +1501,23 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
        return true;
    if( inst.active_count() == 0 )
        return true;
+   //yk: do coalesce first
+   if(inst.get_mem_coalesced() == false){
+       return false;
+   }
    assert( !inst.accessq_empty() );
    mem_stage_stall_type stall_cond = NO_RC_FAIL;
 
-
    // the memory access
-   stall_cond = process_memory_access_queue(m_mmuTLB,inst);
+   stall_cond = process_translation_access_queue(m_mmuTLB,inst);
 
    //yk: stall_reason & access_type for statistics
-   if( !inst.accessq_empty() )
+   if( !inst.translationq_empty() )
        stall_cond = COAL_STALL;
    if (stall_cond != NO_RC_FAIL) {
-      stall_reason = stall_cond;
-      bool iswrite = inst.is_store();
-      access_type = (iswrite)?G_MEM_ST:G_MEM_LD;
+      access_type = G_MEM_LD;
    }
-   return inst.accessq_empty();
+   return inst.translationq_empty();
 }
 
 bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
@@ -1540,7 +1545,49 @@ bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stal
 
     return inst.generate_vtl_mem_accesses();
 }
+mem_stage_stall_type
+ldst_unit::process_tlb_access( cache_t* cache,
+                                 new_addr_type address,
+                                 warp_inst_t &inst,
+                                 std::list<cache_event>& events,
+                                 mem_fetch *mf,
+                                 enum cache_request_status status )
+{
+    mem_stage_stall_type result = NO_RC_FAIL;
+    bool read_sent = was_read_sent(events);
+    if ( status == HIT ) {
+        assert( !read_sent );
+        inst.translationq_pop_back();
+        delete mf;
+    } else if ( status == RESERVATION_FAIL ) {
+        result = COAL_STALL;
+        assert( !read_sent );
+        delete mf;
+    } else {
+        assert( status == MISS || status == HIT_RESERVED );
+        //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
+        inst.translationq_pop_back();
+    }
+    if( !inst.translationq_empty() )
+        result = BK_CONF;
+    return result;
+}
 
+mem_stage_stall_type ldst_unit::process_translation_access_queue( cache_t *cache, warp_inst_t &inst )
+{
+    mem_stage_stall_type result = NO_RC_FAIL;
+    if( inst.translationq_empty() )
+        return result;
+
+    if( !cache->data_port_free() )
+        return DATA_PORT_STALL;
+
+    //const mem_access_t &access = inst.accessq_back();
+    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
+    std::list<cache_event> events;
+    enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
+    return process_tlb_access( cache, mf->get_addr(), inst, events, mf, status );
+}
 bool ldst_unit::response_buffer_full() const
 {
     return m_response_fifo.size() >= m_config->ldst_unit_response_queue_size;
@@ -1717,7 +1764,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                               IN_L1D_MISS_QUEUE );
     }
     //yk: add mmu TLB/cache initialization
-    if( !m_config->m_mmu_TLB_config.disabled() ){
+    if( m_config->gpgpu_mmu ){
          char TLB_name[STRSIZE];
          snprintf(TLB_name, STRSIZE, "TLB_%03d", m_sid);
          m_mmuTLB = new mmu_tlb_cache( TLB_name,
@@ -1727,6 +1774,11 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        m_icnt,
                                        m_mf_allocator,
                                        IN_L1D_MISS_QUEUE );
+    }
+    //yk: add page walker unit
+    if(m_config->gpgpu_mmu){
+
+
     }
 }
 
@@ -1910,8 +1962,11 @@ void ldst_unit::cycle()
                m_response_fifo.pop_front(); 
            }
        } else if(mf->ispagewalk()){
+           //0729 should add check translation response
 
-
+           ////////////////////////////////////////////
+           ////////////////////////////////////////////
+           /// should process multi-level page table walk
 
 
        } else {
@@ -1952,6 +2007,7 @@ void ldst_unit::cycle()
    m_L1C->cycle();
    if( m_L1D ) m_L1D->cycle();
    //yk: add mmu cache here?
+   if(m_mmuTLB) m_mmuTLB->cycle();
 
 
    //yk: stage 3
@@ -1968,9 +2024,13 @@ void ldst_unit::cycle()
 
 
    if(m_core->get_config()->gpgpu_mmu == true){
+      //yk: run original memory cycle
       done &= memory_cycle(pipe_reg, rc_fail, type);
+      //yk: PTW handle page walk
       done &= mmu_page_walk_cycle(pipe_reg, rc_fail, type);
+      //yk: do TLB access and push request into mshr if miss
       done &= mmu_translate_cycle(pipe_reg, rc_fail, type);
+      //yk: coalesce memory access and push into translationq
       done &= mmu_coalesce_cycle(pipe_reg, rc_fail, type);
    }
    else{
@@ -3509,3 +3569,49 @@ void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned 
     }
 }
 
+
+enum cache_request_status
+mmu_tlb_cache::access( new_addr_type addr,
+                  mem_fetch *mf,
+                  unsigned time,
+                  std::list<cache_event> &events )
+{
+    return data_cache::access( addr, mf, time, events );
+}
+//yk: 0724 have to modify
+void mmu_tlb_cache::cycle(){
+    if ( !m_miss_queue.empty() ) {
+        mem_fetch *mf = m_miss_queue.front();
+        //here push into PTW unit
+        if(!m_ptw->full()){
+            m_miss_queue.pop_front();
+            mf->setpagewalk();
+            m_ptw->push(mf);
+        }
+    }
+}
+void page_table_walker::cycle(){
+    // check if there are not issed memory access
+
+    if ( !m_waiting_translateq.empty() ) {
+        mem_fetch *mf = m_waiting_translateq.front();
+        if ( !m_memport->full(mf->size(),false) ) {
+            m_waiting_translateq.pop_front();
+            m_memport->push(mf);
+        }
+    }
+    bool data_port_busy = !m_bandwidth_management.data_port_free();
+    bool fill_port_busy = !m_bandwidth_management.fill_port_free();
+    m_bandwidth_management.replenish_port_bandwidth();
+
+}
+void page_table_walker::push(mem_fetch *mf){
+    m_waiting_translateq.push_back(mf);
+}
+bool page_table_walkder::full(){
+    //currently don't set limitation
+    return false;
+}
+void page_table_walker::pop(){
+    m_waiting_translateq.pop_back(mf);
+}

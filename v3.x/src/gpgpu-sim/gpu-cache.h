@@ -560,7 +560,7 @@ public:
 
     virtual enum cache_request_status access( new_addr_type addr, mem_fetch *mf, unsigned time, std::list<cache_event> &events ) =  0;
     /// Sends next request to lower level of memory
-    void cycle();
+    virtual void cycle();
     /// Interface for response from lower memory level (model bandwidth restictions in caller)
     void fill( mem_fetch *mf, unsigned time );
     /// Checks if mf is waiting to be filled by lower memory level
@@ -1149,32 +1149,16 @@ class mmu_tlb_cache: public data_cache {
 public:
     mmu_tlb_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status  )
             : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC){}
 
     virtual ~mmu_tlb_cache(){}
-
+    virtual void cycle();
     virtual enum cache_request_status
         access( new_addr_type addr,
                 mem_fetch *mf,
                 unsigned time,
                 std::list<cache_event> &events );
 };
-class mmu_l1_cache: public data_cache {
-public:
-    mmu_l1_cache(const char *name, cache_config &config,
-            int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC){}
-
-    virtual ~mmu_l1_cache(){}
-
-    virtual enum cache_request_status
-        access( new_addr_type addr,
-                mem_fetch *mf,
-                unsigned time,
-                std::list<cache_event> &events );
-};
-
 
 #endif

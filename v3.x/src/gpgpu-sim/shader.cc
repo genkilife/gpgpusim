@@ -1462,7 +1462,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    }
    if( !inst.accessq_empty() )
        //yk: guess the function of coalesce stall
-       //yk: the address issued by the warp instruction will be coalesced into few memory accesses
+       //yk: the address issued by the warp instruction will be coalesced into fewer memory accesses
        //yk: the ldst_unit can only process one request per cycle. Have to use more cycles to process this instruction
        stall_cond = COAL_STALL;
    if (stall_cond != NO_RC_FAIL) {
@@ -1478,11 +1478,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
 
 bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
-
-
-
-
-
+    m_ptw->cycle(inst, stall_reason, access_type);
     return false;
 }
 
@@ -1506,6 +1502,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
        return false;
    }
    assert( !inst.accessq_empty() );
+   assert( !inst.translationq_empty());
    mem_stage_stall_type stall_cond = NO_RC_FAIL;
 
    // the memory access
@@ -1517,6 +1514,10 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
    if (stall_cond != NO_RC_FAIL) {
       access_type = G_MEM_LD;
    }
+
+
+   //yk: 0729 be careful here.
+   //yk: If the access is pushed into PTW, this check status will return true.
    return inst.translationq_empty();
 }
 
@@ -1538,9 +1539,7 @@ bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stal
          return true;
     }
 
-
     // start doing coalescing
-
     assert( CACHE_UNDEFINED != inst.cache_op );
 
     return inst.generate_vtl_mem_accesses();
@@ -1582,7 +1581,6 @@ mem_stage_stall_type ldst_unit::process_translation_access_queue( cache_t *cache
     if( !cache->data_port_free() )
         return DATA_PORT_STALL;
 
-    //const mem_access_t &access = inst.accessq_back();
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
     std::list<cache_event> events;
     enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
@@ -1765,6 +1763,16 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
     }
     //yk: add mmu TLB/cache initialization
     if( m_config->gpgpu_mmu ){
+        //initial page table walker first
+         m_ptw = new page_table_walker(m_icnt,
+                                       m_mf_allocator,
+                                       m_core,
+                                       config,
+                                       m_memory_config,
+                                       m_config->m_mmu_TLB_config,
+                                       m_sid);
+
+
          char TLB_name[STRSIZE];
          snprintf(TLB_name, STRSIZE, "TLB_%03d", m_sid);
          m_mmuTLB = new mmu_tlb_cache( TLB_name,
@@ -1773,12 +1781,10 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        get_shader_normal_cache_id(),
                                        m_icnt,
                                        m_mf_allocator,
-                                       IN_L1D_MISS_QUEUE );
-    }
-    //yk: add page walker unit
-    if(m_config->gpgpu_mmu){
+                                       IN_L1D_MISS_QUEUE,
+                                       m_ptw);
 
-
+         m_ptw -> set_mmutlb(m_mmuTLB);
     }
 }
 
@@ -1962,13 +1968,9 @@ void ldst_unit::cycle()
                m_response_fifo.pop_front(); 
            }
        } else if(mf->ispagewalk()){
-           //0729 should add check translation response
-
-           ////////////////////////////////////////////
-           ////////////////////////////////////////////
-           /// should process multi-level page table walk
-
-
+           // 0729 should add check translation response
+           // should process multi-level page table walk
+           // leave empty, process response in page table walker unit
        } else {
     	   if( mf->get_type() == WRITE_ACK || ( m_config->gpgpu_perfect_mem && mf->get_is_write() )) {
                m_core->store_ack(mf);
@@ -3568,16 +3570,10 @@ void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned 
         }
     }
 }
+/******************************************************************************************************************************************/
+/******************************************************************************************************************************************/
+/******************************************************************************************************************************************/
 
-
-enum cache_request_status
-mmu_tlb_cache::access( new_addr_type addr,
-                  mem_fetch *mf,
-                  unsigned time,
-                  std::list<cache_event> &events )
-{
-    return data_cache::access( addr, mf, time, events );
-}
 //yk: 0724 have to modify
 void mmu_tlb_cache::cycle(){
     if ( !m_miss_queue.empty() ) {
@@ -3590,28 +3586,58 @@ void mmu_tlb_cache::cycle(){
         }
     }
 }
-void page_table_walker::cycle(){
-    // check if there are not issed memory access
+enum cache_request_status
+mmu_tlb_cache::access( new_addr_type addr,
+                  mem_fetch *mf,
+                  unsigned time,
+                  std::list<cache_event> &events )
+{
+    return data_cache::access( addr, mf, time, events );
+}
 
+
+
+
+void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type){
+    // 1. push mf into main memory
+    // 2. resolve mf from main memory
+
+
+
+    if( !m_ldst_unit->m_response_fifo.empty() ) {
+        mem_fetch *mf = m_ldst_unit->m_response_fifo.front();
+        if(mf->ispagewalk()){
+            // generate new mf to main memory
+            // or send fill response to mmu tlb
+
+
+
+        }
+    }
+
+
+    // check if there are not issed memory access
     if ( !m_waiting_translateq.empty() ) {
         mem_fetch *mf = m_waiting_translateq.front();
         if ( !m_memport->full(mf->size(),false) ) {
             m_waiting_translateq.pop_front();
+
+
+
+            // before push into main memory
+            // check the physical address by cr3 reg
             m_memport->push(mf);
         }
     }
-    bool data_port_busy = !m_bandwidth_management.data_port_free();
-    bool fill_port_busy = !m_bandwidth_management.fill_port_free();
     m_bandwidth_management.replenish_port_bandwidth();
-
 }
 void page_table_walker::push(mem_fetch *mf){
     m_waiting_translateq.push_back(mf);
 }
-bool page_table_walkder::full(){
+bool page_table_walker::full(){
     //currently don't set limitation
     return false;
 }
 void page_table_walker::pop(){
-    m_waiting_translateq.pop_back(mf);
+    m_waiting_translateq.pop_back();
 }

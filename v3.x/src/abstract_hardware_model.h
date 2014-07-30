@@ -691,6 +691,37 @@ struct dram_callback_t {
    class ptx_thread_info *thread;
 };
 
+//yk: add translation mapping relation
+class addr_translation_trace{
+    public:
+    addr_translation_trace():
+        virtual_addr(NULL),pml4_base_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),phys_addr(NULL),translated_level(0){}
+    addr_translation_trace(new_addr_type vtl_addr):
+        virtual_addr(vtl_addr),pml4_base_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),phys_addr(NULL),translated_level(0){}
+    ~addr_translation_trace();
+
+    void gen_pml4_addr(new_addr_type);
+    void gen_pdt_addr(new_addr_type);
+    void gen_pd_addr(new_addr_type);
+    void gen_pt_addr(new_addr_type);
+
+
+    new_addr_type get_pml4_addr(){return pml4_addr;}
+    new_addr_type get_pdt_addr(){return pdt_addr;}
+    new_addr_type get_pd_addr(){return pd_addr;}
+    new_addr_type get_pt_addr(){return pt_addr;}
+protected:
+    new_addr_type virtual_addr;
+    new_addr_type pml4_addr;
+    new_addr_type pdt_addr;
+    new_addr_type pd_addr;
+    new_addr_type pt_addr;
+    new_addr_type phys_addr;
+
+    unsigned translated_level;
+};
+
+
 class inst_t {
 public:
     inst_t()
@@ -797,6 +828,8 @@ public:
         m_is_printf=false;
         m_mem_tranlstion_created = false;
         m_mem_coalesced = false;
+        m_translationq.clear();
+        m_translation_trace.clear();
     }
     virtual ~warp_inst_t(){
     }
@@ -945,8 +978,8 @@ public:
     unsigned get_uid() const { return m_uid; }
     bool get_mem_tranlstion_created(){ return m_mem_tranlstion_created;}
     bool get_mem_coalesced(){return m_mem_coalesced;}
-    bool set_mem_tranlstion_created(bool flag){ m_mem_tranlstion_created = flag;}
-    bool set_mem_coalesced(bool flag){ m_mem_coalesced = flag;}
+    void set_mem_tranlstion_created(bool flag){ m_mem_tranlstion_created = flag;}
+    void set_mem_coalesced(bool flag){ m_mem_coalesced = flag;}
 protected:
 
     unsigned m_uid;
@@ -977,7 +1010,14 @@ protected:
 
     //yk: add mmu feature
     bool m_mem_tranlstion_created;
+    //yk: the translation path table of each virtual address
+    std::list<addr_translation_trace> m_translation_trace;
+
+
+    //yk: the virtual addresses are coalesced by page size
+    //yk: translationq save the coalesced virtual address access
     std::list<mem_access_t> m_translationq;
+
     bool m_mem_coalesced;
 
     static unsigned sm_next_uid;

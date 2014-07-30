@@ -363,6 +363,9 @@ private:
     unsigned long long liveness_message_freq; 
 
     friend class gpgpu_sim;
+
+    //yk: add gpgpu mmu flag
+    bool gpgpusim_mmu;
 };
 
 class gpgpu_sim : public gpgpu_t {
@@ -501,6 +504,10 @@ public:
 
    FILE* f_vtl_dump;
    bool virtual_address_feature;
+
+   std::map< unsigned long long, unsigned long long > m_mmu_table;
+   unsigned long long m_cr3_reg;
+   unsigned long long m_addr_step;
 
 };
 

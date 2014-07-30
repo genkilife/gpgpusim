@@ -388,6 +388,9 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
     }
     std::set<new_addr_type>::iterator it_addr;
     for(it_addr = mem_vtl_address.begin(); it_addr != mem_vtl_address.end(); it_addr++){
+        //yk: generate the mapping table
+        addr_translation_trace addr_trace(*it_addr);
+        m_translation_trace.push_back(addr_trace);
         m_translationq.push_back(mem_access_t(access_type,*it_addr,8,is_write));
     }
     m_mem_coalesced = true;

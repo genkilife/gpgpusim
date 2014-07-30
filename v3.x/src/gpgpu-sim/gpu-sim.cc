@@ -457,6 +457,9 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
     option_parser_register(opp, "-virtual_addr_feature", OPT_BOOL,
                          &virtual_address_feature, "Enable virtual address system support",
                          "0");
+    option_parser_register(opp, "-gpgpusim_mmu", OPT_BOOL, &gpgpusim_mmu,
+             "gpu mmu feature (default = off)",
+             "0");
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -625,6 +628,15 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     }
     else{
         virtual_address_feature = FALSE;
+    }
+
+    if(m_config.gpgpusim_mmu == 1){
+        m_cr3_reg = 0x80000000;
+        m_addr_step = 0x0;
+    }
+    else{
+        m_cr3_reg = 0x0;
+        m_addr_step = 0x0;
     }
 }
 

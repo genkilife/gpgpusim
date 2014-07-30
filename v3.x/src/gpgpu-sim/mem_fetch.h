@@ -94,7 +94,7 @@ public:
    enum mf_type get_type() const { return m_type; }
    bool isatomic() const;
    bool ispagewalk() const{return m_pagewalk;}
-   void setpagewalk()const{m_pagewalk=true;}
+   void setpagewalk(){m_pagewalk=true;}
 
    void set_return_timestamp( unsigned t ) { m_timestamp2=t; }
    void set_icnt_receive_time( unsigned t ) { m_icnt_receive_time=t; }

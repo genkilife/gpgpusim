@@ -1077,19 +1077,20 @@ class page_table_walker{
                           shader_core_ctx *core,
                           const shader_core_config *config,
                           const memory_config *mem_config,
-                          unsigned sid,
-                          unsigned tpc)
+                          cache_config &cache_config,
+                          unsigned sid
+                          )
                 : m_memory_config(mem_config),m_icnt(icnt),m_mf_allocator(mf_allocator),m_core(core),
-                    m_sid(sid),m_tpc(tpc),m_shader_config(config){}
+                    m_sid(sid),m_shader_config(config),m_bandwidth_management(cache_config){}
         ~page_table_walker();
 
 
 
-        virtual void cycle();
+        virtual void cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type);
         virtual void push(mem_fetch *mf);
         virtual bool full();
 
-
+        void set_mmutlb(mmu_tlb_cache *mmu_tlb){m_mmu_tlb_cache = mmu_tlb;}
     protected:
         const memory_config *m_memory_config;
         class mem_fetch_interface *m_icnt;
@@ -1097,12 +1098,10 @@ class page_table_walker{
         class shader_core_ctx *m_core;
         const shader_core_config *m_shader_config;
         unsigned m_sid;
-        unsigned m_tpc;
 
         std::list<mem_fetch*> m_waiting_translateq;
+        mem_fetch_interface    *m_memport;
 
-
-        new_addr_type m_cr3_reg;
     protected:
         virtual void pop();
 
@@ -1119,7 +1118,17 @@ class page_table_walker{
             void use_fill_port(mem_fetch *mf);
 
             /// called every cache cycle to free up the ports
-            void replenish_port_bandwidth();
+            void replenish_port_bandwidth(){
+                if (m_data_port_occupied_cycles > 0) {
+                    m_data_port_occupied_cycles -= 1;
+                }
+                assert(m_data_port_occupied_cycles >= 0);
+
+                if (m_fill_port_occupied_cycles > 0) {
+                    m_fill_port_occupied_cycles -= 1;
+                }
+                assert(m_fill_port_occupied_cycles >= 0);
+            }
 
             /// query for data port availability
             bool data_port_free() const;
@@ -1133,6 +1142,9 @@ class page_table_walker{
         };
 
         bandwidth_management m_bandwidth_management;
+
+        mmu_tlb_cache *m_mmu_tlb_cache;
+        ldst_unit * m_ldst_unit;
 };
 
 //yk: borrow l1 model and modify it into tlb module

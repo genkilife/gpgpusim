@@ -1183,36 +1183,3 @@ void tex_cache::display_state( FILE *fp ) const
     }
 }
 /******************************************************************************************************************************************/
-enum cache_request_status
-mmu_tlb_cache::access( new_addr_type addr,
-                  mem_fetch *mf,
-                  unsigned time,
-                  std::list<cache_event> &events )
-{
-    return data_cache::access( addr, mf, time, events );
-}
-//yk: 0724 have to modify
-void mmu_tlb_cache::cycle(){
-    if ( !m_miss_queue.empty() ) {
-        mem_fetch *mf = m_miss_queue.front();
-        //here push into PTW unit
-
-        /*
-        if ( !m_memport->full(mf->size(),mf->get_is_write()) ) {
-            m_miss_queue.pop_front();
-            m_memport->push(mf);
-        }
-        */
-    }
-}
-
-/*
-enum cache_request_status
-mmu_l1_cache::access( new_addr_type addr,
-                  mem_fetch *mf,
-                  unsigned time,
-                  std::list<cache_event> &events )
-{
-    return data_cache::access( addr, mf, time, events );
-}
-*/

@@ -1770,7 +1770,8 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        config,
                                        m_memory_config,
                                        m_config->m_mmu_TLB_config,
-                                       m_sid);
+                                       m_sid,
+                                       &core->get_cluster()->get_gpu());
 
 
          char TLB_name[STRSIZE];
@@ -1782,7 +1783,8 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        m_icnt,
                                        m_mf_allocator,
                                        IN_L1D_MISS_QUEUE,
-                                       m_ptw);
+                                       m_ptw,
+                                       &core->get_cluster()->get_gpu());
 
          m_ptw -> set_mmutlb(m_mmuTLB);
     }
@@ -3581,7 +3583,18 @@ void mmu_tlb_cache::cycle(){
         //here push into PTW unit
         if(!m_ptw->full()){
             m_miss_queue.pop_front();
+
+            //get original virtual address
+            new_addr_type mf_vtl_addr = mf->get_addr();
+            new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
+            new_addr_type target_addr = *m_cr3 + offset;
+
+            // set page walk property
             mf->setpagewalk();
+            mf->set_addr(target_addr);
+            mf->set_data_size(8);
+            mf->set_mf_vtl_addr(mf_vtl_addr);
+
             m_ptw->push(mf);
         }
     }
@@ -3597,23 +3610,83 @@ mmu_tlb_cache::access( new_addr_type addr,
 
 
 
-
+// inst here is from ldst_unit
+// which is copied by mf
 void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type){
     // 1. push mf into main memory
     // 2. resolve mf from main memory
 
-
-
     if( !m_ldst_unit->m_response_fifo.empty() ) {
         mem_fetch *mf = m_ldst_unit->m_response_fifo.front();
         if(mf->ispagewalk()){
+            // get this mf's address
+            new_addr_type  mf_vtrl_addr = mf->get_mf_vtl_addr();
+
+            std::list<addr_translation_trace>::iterator it;
+
+            for(it = inst.m_translation_trace.begin(); it != inst.m_translation_trace.end();t++){
+                new_addr_type vtl_addr = it -> get_vtl_addr();
+                if(vtl_addr == mf_vtrl_addr){
+                    // find the address translated level(PML4. PDT...etc), should smaller then PHYS
+                    assert(it->get_page_index() < PHYS);
+
+                    // If it is the last level, send fill response to mmu tlb and do physical memory access
+                    if(it->get_page_index() == PT){
+                        if (m_mmu_tlb_cache->fill_port_free()) {
+                            m_mmu_tlb_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
+                            m_response_fifo.pop_front();
+                            delete mf;
+                        }
+                    }
+                    // If it is the middle level, generate new mf to main memory
+                    else{
+                        assert(mf->get_data_size() == 8 );
+                        assert(mf->ispagewalk() == true);
+                        if ( m_memport->full(mf->size(),false) ) {
+                            break;
+                        }
+
+                        m_ldst_unit->m_response_fifo.pop_front();
+                        new_addr_type mf_addr_cs = mf->get_addr();
+                        new_addr_type mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs);
+
+                        assert(mf_addr_cs != NULL && mf_addr_cs != 0x0);
+                        assert(mf_addr_ns != NULL && mf_addr_ns != 0x0);
+                        // yk: increase level
+                        switch(it->get_page_index()){
+                            case PML4:
+                                it->set_page_index(PDT);
+                                it->set_pdt_addr(mf_addr_ns);
+                                break;
+                            case PDT:
+                                it->set_page_index(PD);
+                                it->set_pd_addr(mf_addr_ns);
+                                break;
+                            case PD:
+                                it->set_page_index(PT);
+                                it->set_pt_addr(mf_addr_ns);
+                                break;
+                            default:
+                                assert(0);
+                                break;
+                        }
+
+                        // yk: set new memory fetch
+                        mf->set_addr(mf_addr_ns);
+                        m_memport->push(mf);
+                    }
+                    break;
+                }
+            }
+            // must have translated address mapping
+            assert(it != inst.m_translation_trace.end());
             // generate new mf to main memory
             // or send fill response to mmu tlb
-
-
-
         }
     }
+
+
+
 
 
     // check if there are not issed memory access

@@ -1078,10 +1078,11 @@ class page_table_walker{
                           const shader_core_config *config,
                           const memory_config *mem_config,
                           cache_config &cache_config,
-                          unsigned sid
+                          unsigned sid,
+                          gpgpu_sim * gpu
                           )
                 : m_memory_config(mem_config),m_icnt(icnt),m_mf_allocator(mf_allocator),m_core(core),
-                    m_sid(sid),m_shader_config(config),m_bandwidth_management(cache_config){}
+                    m_sid(sid),m_shader_config(config),m_bandwidth_management(cache_config),m_gpu(gpu),m_cr3(gpu->m_cr3_reg){}
         ~page_table_walker();
 
 
@@ -1145,6 +1146,10 @@ class page_table_walker{
 
         mmu_tlb_cache *m_mmu_tlb_cache;
         ldst_unit * m_ldst_unit;
+
+        gpgpu_sim *m_gpu;
+        unsigned long long *m_cr3;
+        friend class warp_inst_t;
 };
 
 //yk: borrow l1 model and modify it into tlb module
@@ -1152,8 +1157,8 @@ class mmu_tlb_cache: public data_cache {
 public:
     mmu_tlb_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw )
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_ptw(ptw){}
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw ,gpgpu_sim*gpu)
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_ptw(ptw),m_gpu(gpu),m_cr3(gpu->m_cr3_reg){}
 
     virtual ~mmu_tlb_cache(){}
     virtual void cycle();
@@ -1164,6 +1169,8 @@ public:
                 std::list<cache_event> &events );
 protected:
     page_table_walker *m_ptw;
+    gpgpu_sim *m_gpu;
+    unsigned long long* m_cr3;
 };
 
 
@@ -1852,7 +1859,8 @@ public:
 	 void incfuactivelanes_stat(unsigned active_count) {m_stats->m_active_fu_lanes[m_sid]=m_stats->m_active_fu_lanes[m_sid]+active_count;}
 	 void incfumemactivelanes_stat(unsigned active_count) {m_stats->m_active_fu_mem_lanes[m_sid]=m_stats->m_active_fu_mem_lanes[m_sid]+active_count;}
 
-	 void inc_simt_to_mem(unsigned n_flits){ m_stats->n_simt_to_mem[m_sid] += n_flits; }
+     void inc_simt_to_mem(unsigned n_flits){ m_stats->n_simt_to_mem[m_sid] += n_flits; }
+     class simt_core_cluster *get_cluster(){ return  m_cluster;}
 
 private:
 	 unsigned inactive_lanes_accesses_sfu(unsigned active_count,double latency){

@@ -632,7 +632,7 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
     if(m_config.gpgpusim_mmu == 1){
         m_cr3_reg = 0x80000000;
-        m_addr_step = 0x0;
+        m_addr_step = m_cr3_reg + 0x1000;
     }
     else{
         m_cr3_reg = 0x0;
@@ -1445,3 +1445,46 @@ simt_core_cluster * gpgpu_sim::getSIMTCluster()
    return *m_cluster;
 }
 
+// yk: generate mapping to find translated addr
+new_addr_type gpgpu_sim::get_vtl_mapped_phys_addr(new_addr_type in_phys_addr){
+    new_addr_type block_addr = in_phys_addr & (new_addr_type)(~0xfff);
+    new_addr_type src_addr, dest_addr;
+
+    new_addr_type pml4_offset = ((block_addr >> 39) & (0x1ff)) << 3;
+    src_addr = m_cr3_reg + pml4_offset;
+    dest_addr = get_phys_data(src_addr);
+
+    new_addr_type pdt_offset = ((block_addr >> 30) & (0x1ff)) << 3;
+    src_addr = dest_addr + pdt_offset;
+    dest_addr = get_phys_data(src_addr);
+
+    new_addr_type pd_offset = ((block_addr >> 21) & (0x1ff)) << 3;
+    src_addr = dest_addr + pd_offset;
+    dest_addr = get_phys_data(src_addr);
+
+    new_addr_type pt_offset = ((block_addr >> 12) & (0x1ff)) << 3;
+    src_addr = dest_addr + pt_offset;
+    dest_addr = get_phys_data(src_addr);
+
+    assert( (dest_addr & 0xfff) == 0x0 );
+    dest_addr |=  (in_phys_addr & 0xfff);
+
+    return dest_addr;
+}
+
+// yk: implementation here use contiguous 4k page block
+new_addr_type gpgpu_sim::get_phys_data(new_addr_type src_addr){
+
+    std::map<unsigned long long, unsigned long long>::iterator it;
+
+    assert(src_addr != 0x0);
+    it = m_mmu_table.find(src_addr);
+    if(it == m_mmu_table.end()){
+        m_mmu_table[ src_addr ] = m_addr_step;
+        m_addr_step += 0x1000;
+    }
+    else{
+        return it->second;
+    }
+    return 0x0;
+}

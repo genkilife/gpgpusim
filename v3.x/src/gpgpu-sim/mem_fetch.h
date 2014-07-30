@@ -113,6 +113,10 @@ public:
    const memory_config *get_mem_config(){return m_mem_config;}
 
    unsigned get_num_flits(bool simt_to_mem);
+
+
+   new_addr_type get_mf_vtl_addr() const { return m_vtl_addr; }
+   new_addr_type set_mf_vtl_addr(new_addr_type vtl_addr) { m_vtl_addr = vtl_addr; }
 private:
    // request source information
    unsigned m_request_uid;
@@ -148,6 +152,7 @@ private:
 
    //yk: add page walk flag
    bool m_pagewalk;
+   new_addr_type m_vtl_addr;
 };
 
 #endif

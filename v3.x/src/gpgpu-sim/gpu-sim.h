@@ -509,6 +509,8 @@ public:
    unsigned long long m_cr3_reg;
    unsigned long long m_addr_step;
 
+   new_addr_type get_vtl_mapped_phys_addr(new_addr_type);
+   new_addr_type get_phys_data(new_addr_type);
 };
 
 #endif

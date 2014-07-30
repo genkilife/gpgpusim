@@ -126,6 +126,15 @@ enum _memory_op_t {
 	memory_store
 };
 
+
+enum page_index{
+    PML4 = 0,
+    PDT=1,
+    PD=2,
+    PT=3,
+    PHYS=4
+};
+
 #include <bitset>
 #include <list>
 #include <vector>
@@ -695,30 +704,33 @@ struct dram_callback_t {
 class addr_translation_trace{
     public:
     addr_translation_trace():
-        virtual_addr(NULL),pml4_base_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),phys_addr(NULL),translated_level(0){}
-    addr_translation_trace(new_addr_type vtl_addr):
-        virtual_addr(vtl_addr),pml4_base_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),phys_addr(NULL),translated_level(0){}
+        block_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),page_addr(NULL),m_page_index(PML4){}
+    addr_translation_trace(new_addr_type block_addr):
+        block_addr(block_addr),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),page_addr(NULL),m_page_index(PML4){}
     ~addr_translation_trace();
 
-    void gen_pml4_addr(new_addr_type);
-    void gen_pdt_addr(new_addr_type);
-    void gen_pd_addr(new_addr_type);
-    void gen_pt_addr(new_addr_type);
+    void set_pdt_addr(new_addr_type base_addr){pdt_base_addr = base_addr;}
+    void set_pd_addr(new_addr_type base_addr){pd_base_addr = base_addr;}
+    void set_pt_addr(new_addr_type base_addr){pt_base_addr = base_addr;}
+    void set_page_addr(new_addr_type base_addr){page_addr = base_addr;}
 
+    void set_page_index(page_index page_idx){m_page_index =page_idx;}
 
-    new_addr_type get_pml4_addr(){return pml4_addr;}
-    new_addr_type get_pdt_addr(){return pdt_addr;}
-    new_addr_type get_pd_addr(){return pd_addr;}
-    new_addr_type get_pt_addr(){return pt_addr;}
+    new_addr_type get_block_addr(){return block_addr;}
+    new_addr_type get_pdt_addr(){return pdt_base_addr;}
+    new_addr_type get_pd_addr(){return pd_base_addr;}
+    new_addr_type get_pt_addr(){return pt_base_addr;}
+    new_addr_type get_page_addr(){return page_addr;}
+
+    page_index get_page_index(){return m_page_index;}
 protected:
-    new_addr_type virtual_addr;
-    new_addr_type pml4_addr;
-    new_addr_type pdt_addr;
-    new_addr_type pd_addr;
-    new_addr_type pt_addr;
-    new_addr_type phys_addr;
+    new_addr_type block_addr;
+    new_addr_type pdt_base_addr;
+    new_addr_type pd_base_addr;
+    new_addr_type pt_base_addr;
+    new_addr_type page_addr;
 
-    unsigned translated_level;
+    page_index m_page_index;
 };
 
 

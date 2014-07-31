@@ -55,7 +55,6 @@
 #include "traffic_breakdown.h"
 
 
-
 #define NO_OP_FLAG            0xFF
 
 /* READ_PACKET_SIZE:
@@ -1068,6 +1067,9 @@ class shader_memory_interface;
 class shader_core_mem_fetch_allocator;
 class cache_t;
 
+class mmu_tlb_cache;
+class ldst_unit;
+
 //yk: copy the init unit of ldst_unit
 //yk: modify the content to match mmu unit
 class page_table_walker{
@@ -1079,10 +1081,10 @@ class page_table_walker{
                           const memory_config *mem_config,
                           cache_config &cache_config,
                           unsigned sid,
-                          gpgpu_sim * gpu
+                          unsigned long long &cr3
                           )
                 : m_memory_config(mem_config),m_icnt(icnt),m_mf_allocator(mf_allocator),m_core(core),
-                    m_sid(sid),m_shader_config(config),m_bandwidth_management(cache_config),m_gpu(gpu),m_cr3(gpu->m_cr3_reg){}
+                    m_sid(sid),m_shader_config(config),m_bandwidth_management(cache_config),m_cr3(cr3){}
         ~page_table_walker();
 
 
@@ -1092,6 +1094,9 @@ class page_table_walker{
         virtual bool full();
 
         void set_mmutlb(mmu_tlb_cache *mmu_tlb){m_mmu_tlb_cache = mmu_tlb;}
+
+        class gpgpu_sim *m_gpu;
+        unsigned long long &m_cr3;
     protected:
         const memory_config *m_memory_config;
         class mem_fetch_interface *m_icnt;
@@ -1147,8 +1152,6 @@ class page_table_walker{
         mmu_tlb_cache *m_mmu_tlb_cache;
         ldst_unit * m_ldst_unit;
 
-        gpgpu_sim *m_gpu;
-        unsigned long long *m_cr3;
         friend class warp_inst_t;
 };
 
@@ -1157,8 +1160,9 @@ class mmu_tlb_cache: public data_cache {
 public:
     mmu_tlb_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw ,gpgpu_sim*gpu)
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_ptw(ptw),m_gpu(gpu),m_cr3(gpu->m_cr3_reg){}
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw,
+                  unsigned long long &cr3)
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_ptw(ptw),m_cr3(cr3){}
 
     virtual ~mmu_tlb_cache(){}
     virtual void cycle();
@@ -1167,10 +1171,11 @@ public:
                 mem_fetch *mf,
                 unsigned time,
                 std::list<cache_event> &events );
+
+    class gpgpu_sim *m_gpu;
+    unsigned long long& m_cr3;
 protected:
     page_table_walker *m_ptw;
-    gpgpu_sim *m_gpu;
-    unsigned long long* m_cr3;
 };
 
 
@@ -1301,6 +1306,8 @@ protected:
                                                       mem_fetch *mf,
                                                       enum cache_request_status status );
    mem_stage_stall_type process_translation_access_queue( cache_t *cache, warp_inst_t &inst );
+
+   friend class page_table_walker;
 };
 
 enum pipeline_stage_name_t {
@@ -1991,7 +1998,7 @@ public:
     void print_not_completed( FILE *fp ) const;
     unsigned get_n_active_cta() const;
     unsigned get_n_active_sms() const;
-    gpgpu_sim *get_gpu() { return m_gpu; }
+    class gpgpu_sim *get_gpu() { return m_gpu; }
 
     void display_pipeline( unsigned sid, FILE *fout, int print_mem, int mask );
     void print_cache_stats( FILE *fp, unsigned& dl1_accesses, unsigned& dl1_misses ) const;
@@ -2006,7 +2013,7 @@ public:
 
 private:
     unsigned m_cluster_id;
-    gpgpu_sim *m_gpu;
+    class gpgpu_sim *m_gpu;
     const shader_core_config *m_config;
     shader_core_stats *m_stats;
     memory_stats_t *m_memory_stats;

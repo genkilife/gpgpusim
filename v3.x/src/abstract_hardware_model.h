@@ -1033,6 +1033,8 @@ protected:
     bool m_mem_coalesced;
 
     static unsigned sm_next_uid;
+
+    friend class page_table_walker;
 };
 
 void move_warp( warp_inst_t *&dst, warp_inst_t *&src );

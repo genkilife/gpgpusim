@@ -1411,12 +1411,16 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
        return true;
    if( inst.active_count() == 0 ) 
        return true;
+
+   //This assert promise that
+   //If this memory is the last one to process, after finishing process, this inst will be clear and dispatch_reg will move in new inst.
    assert( !inst.accessq_empty() );
 
-   //yk: if use mmu, should consider that accessq should be pushed translated memory address
-   //yk: if m_mem_tranlstion_created is false, it means the translation doesn't finish.
+   //yk: If use mmu, should consider that accessq should be pushed translated memory address
+   //yk: If m_mem_tranlstion_created is false, it means the translation doesn't finish.
+   //yk: Wait the translation stage to get translated physical address.
    if( (m_core->get_config()->gpgpu_mmu == true) && (inst.get_mem_tranlstion_created()==false)){
-        return true;
+        return false;
    }
 
    mem_stage_stall_type stall_cond = NO_RC_FAIL;
@@ -1552,6 +1556,9 @@ ldst_unit::process_tlb_access( cache_t* cache,
                                  mem_fetch *mf,
                                  enum cache_request_status status )
 {
+    //yk: 0731: have to add code here.
+    //yk: If it is HIT, should pop mem access of translationq and set translated address to accessq
+
     mem_stage_stall_type result = NO_RC_FAIL;
     bool read_sent = was_read_sent(events);
     if ( status == HIT ) {
@@ -1771,8 +1778,9 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        m_memory_config,
                                        m_config->m_mmu_TLB_config,
                                        m_sid,
-                                       &core->get_cluster()->get_gpu());
-
+                                       core->get_cluster()->get_gpu()->m_cr3_reg
+                                       );
+        m_ptw->m_gpu = core->get_cluster()->get_gpu();
 
          char TLB_name[STRSIZE];
          snprintf(TLB_name, STRSIZE, "TLB_%03d", m_sid);
@@ -1784,7 +1792,10 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        m_mf_allocator,
                                        IN_L1D_MISS_QUEUE,
                                        m_ptw,
-                                       &core->get_cluster()->get_gpu());
+                                       core->get_cluster()->get_gpu()->m_cr3_reg
+                                       );
+         m_mmuTLB->m_gpu = core->get_cluster()->get_gpu();
+         m_mmuTLB->m_cr3 = core->get_cluster()->get_gpu()->m_cr3_reg;
 
          m_ptw -> set_mmutlb(m_mmuTLB);
     }
@@ -3587,7 +3598,7 @@ void mmu_tlb_cache::cycle(){
             //get original virtual address
             new_addr_type mf_vtl_addr = mf->get_addr();
             new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
-            new_addr_type target_addr = *m_cr3 + offset;
+            new_addr_type target_addr = m_cr3 + offset;
 
             // set page walk property
             mf->setpagewalk();
@@ -3624,9 +3635,9 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
 
             std::list<addr_translation_trace>::iterator it;
 
-            for(it = inst.m_translation_trace.begin(); it != inst.m_translation_trace.end();t++){
-                new_addr_type vtl_addr = it -> get_vtl_addr();
-                if(vtl_addr == mf_vtrl_addr){
+            for(it = inst.m_translation_trace.begin(); it != inst.m_translation_trace.end();it++){
+                new_addr_type block_addr = it->get_block_addr();
+                if(block_addr == mf_vtrl_addr){
                     // find the address translated level(PML4. PDT...etc), should smaller then PHYS
                     assert(it->get_page_index() < PHYS);
 
@@ -3634,7 +3645,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                     if(it->get_page_index() == PT){
                         if (m_mmu_tlb_cache->fill_port_free()) {
                             m_mmu_tlb_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
-                            m_response_fifo.pop_front();
+                            m_ldst_unit->m_response_fifo.pop_front();
                             delete mf;
                         }
                     }
@@ -3687,15 +3698,11 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
 
 
 
-
-
     // check if there are not issed memory access
     if ( !m_waiting_translateq.empty() ) {
         mem_fetch *mf = m_waiting_translateq.front();
         if ( !m_memport->full(mf->size(),false) ) {
             m_waiting_translateq.pop_front();
-
-
 
             // before push into main memory
             // check the physical address by cr3 reg

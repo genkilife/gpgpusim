@@ -418,7 +418,14 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
    option_parser_register(opp, "-gpgpu_ptx_sim_mode", OPT_INT32, &g_ptx_sim_mode, 
                "Select between Performance (default) or Functional simulation (1)", 
                "0");
-   option_parser_register(opp, "-gpgpu_clock_domains", OPT_CSTR, &gpgpu_clock_domains, 
+   //yk: add functional memory trace
+   option_parser_register(opp, "-gpgpu_funcsim_dump_addr_trace", OPT_BOOL, &g_funcsim_dump_addr_trace,
+               "Dump gpgpusim memory trace or not(default)",
+               "0");
+   option_parser_register(opp, "-gpgpu_funcsim_addr_trace_name", OPT_CSTR, &g_funcsim_addr_trace_name,
+                  "File name of dumped trace",
+                  "funcsim_vtl_dump.txt");
+   option_parser_register(opp, "-gpgpu_clock_domains", OPT_CSTR, &gpgpu_clock_domains,
                   "Clock Domain Frequencies in MhZ {<Core Clock>:<ICNT Clock>:<L2 Clock>:<DRAM Clock>}",
                   "500.0:2000.0:2000.0:2000.0");
    option_parser_register(opp, "-gpgpu_max_concurrent_kernel", OPT_INT32, &max_concurrent_kernel,

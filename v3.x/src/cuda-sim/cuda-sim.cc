@@ -49,6 +49,10 @@
 #include "decuda_pred_table/decuda_pred_table.h"
 #include "../stream_manager.h"
 
+
+bool g_funcsim_dump_addr_trace;
+char * g_funcsim_addr_trace_name;
+
 int gpgpu_ptx_instruction_classification;
 void ** g_inst_classification_stat = NULL;
 void ** g_inst_op_classification_stat= NULL;

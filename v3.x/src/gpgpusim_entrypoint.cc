@@ -213,6 +213,11 @@ gpgpu_sim *gpgpu_ptx_sim_init_perf()
    sem_init(&g_sim_signal_finish,0,0);
    sem_init(&g_sim_signal_exit,0,0);
 
+   //yk: add code to dump vtl addr from funcsim
+   if(g_funcsim_dump_addr_trace == true){
+        fptr_func_addr_dump = fopen(g_funcsim_addr_trace_name,"w");
+   }
+
    return g_the_gpu;
 }
 

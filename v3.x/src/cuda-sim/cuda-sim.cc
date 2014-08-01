@@ -50,8 +50,9 @@
 #include "../stream_manager.h"
 
 
-bool g_funcsim_dump_addr_trace;
-char * g_funcsim_addr_trace_name;
+bool g_funcsim_dump_addr_trace=false;
+char * g_funcsim_addr_trace_name=NULL;
+FILE * fptr_func_addr_dump=NULL;
 
 int gpgpu_ptx_instruction_classification;
 void ** g_inst_classification_stat = NULL;

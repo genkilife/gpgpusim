@@ -2186,7 +2186,7 @@ void decode_space( memory_space_t &space, ptx_thread_info *thread, const operand
    }
 }
 
-void ld_exec( const ptx_instruction *pI, ptx_thread_info *thread ) 
+void ld_exec( const ptx_instruction *pI, ptx_thread_info *thread )
 { 
    const operand_info &dst = pI->dst();
    const operand_info &src1 = pI->src1();
@@ -2227,7 +2227,14 @@ void ld_exec( const ptx_instruction *pI, ptx_thread_info *thread )
          thread->set_vector_operand_values(dst,data1,data2,data2,data2);
    }
    thread->m_last_effective_address = addr;
-   thread->m_last_memory_space = space; 
+   thread->m_last_memory_space = space;
+
+
+   if(fptr_func_addr_dump != NULL){
+      if(space->is_global() == true){
+         fprintf(fptr_func_addr_dump,"\n",);
+      }
+   }
 }
 
 void ld_impl( const ptx_instruction *pI, ptx_thread_info *thread ) 

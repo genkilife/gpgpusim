@@ -51,6 +51,7 @@ extern int g_ptx_kernel_count; // used for classification stat collection purpos
 extern bool g_funcsim_dump_addr_trace;
 extern char * g_funcsim_addr_trace_name;
 
+
 void ptx_opcocde_latency_options (option_parser_t opp);
 extern class kernel_info_t *gpgpu_opencl_ptx_sim_init_grid(class function_info *entry,
                                             gpgpu_ptx_sim_arg_list_t args, 

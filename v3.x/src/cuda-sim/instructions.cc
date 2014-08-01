@@ -51,6 +51,8 @@ const char *g_opcode_string[NUM_OPCODES] = {
 #undef OP_DEF
 };
 
+extern FILE * fptr_func_addr_dump;
+
 void inst_not_implemented( const ptx_instruction * pI ) ;
 ptx_reg_t srcOperandModifiers(ptx_reg_t opData, operand_info opInfo, operand_info dstInfo, unsigned type, ptx_thread_info *thread);
 
@@ -2231,8 +2233,16 @@ void ld_exec( const ptx_instruction *pI, ptx_thread_info *thread )
 
 
    if(fptr_func_addr_dump != NULL){
-      if(space->is_global() == true){
-         fprintf(fptr_func_addr_dump,"\n",);
+      if(space.is_global() == true){
+         fprintf(fptr_func_addr_dump,"%llx %u %u %u %u %u %u %c\n",(long long unsigned)addr,
+                 thread->get_ctaid().x,
+                 thread->get_ctaid().y,
+                 thread->get_ctaid().z,
+                 thread->get_tid().x,
+                 thread->get_tid().y,
+                 thread->get_tid().z,
+                 'r');
+         fflush(fptr_func_addr_dump);
       }
    }
 }
@@ -3605,7 +3615,22 @@ void st_impl( const ptx_instruction *pI, ptx_thread_info *thread )
       }
    }
    thread->m_last_effective_address = addr;
-   thread->m_last_memory_space = space; 
+   thread->m_last_memory_space = space;
+
+
+   if(fptr_func_addr_dump != NULL){
+      if(space.is_global() == true){
+         fprintf(fptr_func_addr_dump,"%llx %u %u %u %u %u %u %c\n",(long long unsigned)addr,
+                 thread->get_ctaid().x,
+                 thread->get_ctaid().y,
+                 thread->get_ctaid().z,
+                 thread->get_tid().x,
+                 thread->get_tid().y,
+                 thread->get_tid().z,
+                 'w');
+         fflush(fptr_func_addr_dump);
+      }
+  }
 }
 
 void sub_impl( const ptx_instruction *pI, ptx_thread_info *thread ) 

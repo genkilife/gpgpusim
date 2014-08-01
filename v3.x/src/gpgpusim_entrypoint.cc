@@ -61,6 +61,7 @@ static int sg_argc = 3;
 static const char *sg_argv[] = {"", "-config","gpgpusim.config"};
 
 
+extern FILE * fptr_func_addr_dump;
 
 static void print_simulation_time();
 

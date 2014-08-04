@@ -839,9 +839,11 @@ public:
         m_cache_hit=false;
         m_is_printf=false;
         m_mem_tranlstion_created = false;
+        m_mem_tranlstion_finished = false;
         m_mem_coalesced = false;
         m_translationq.clear();
         m_translation_trace.clear();
+        m_translated_ready_q.clear();
     }
     virtual ~warp_inst_t(){
     }
@@ -975,6 +977,21 @@ public:
     const mem_access_t &translationq_back() { return m_translationq.back(); }
     void translationq_pop_back() { m_translationq.pop_back(); }
 
+    unsigned  translation_trace_empty()const{return m_translation_trace.empty();}
+    unsigned translation_trace_count() const { return m_translation_trace.size(); }
+    const addr_translation_trace &translation_trace_back() { return m_translation_trace.back(); }
+    void translation_trace_pop_back() { m_translation_trace.pop_back(); }
+
+    bool translated_ready_q_empty() const { return m_translated_ready_q.empty(); }
+    unsigned translated_ready_q_count() const { return m_translated_ready_q.size(); }
+    const new_addr_type &translated_ready_q_back() { return m_translated_ready_q.back(); }
+    void translated_ready_q_pop_back() { m_translated_ready_q.pop_back(); }
+    void translated_ready_q_push_back(new_addr_type addr){m_translated_ready_q.push_back(addr);}
+
+    std::list<mem_access_t>& get_translationq(){return m_translationq;}
+    std::list<mem_access_t>& get_accessq(){return m_accessq;}
+
+
     bool dispatch_delay()
     { 
         if( cycles > 0 ) 
@@ -989,8 +1006,10 @@ public:
     void print( FILE *fout ) const;
     unsigned get_uid() const { return m_uid; }
     bool get_mem_tranlstion_created(){ return m_mem_tranlstion_created;}
+    bool get_mem_tranlstion_finished(){ return m_mem_tranlstion_finished;}
     bool get_mem_coalesced(){return m_mem_coalesced;}
     void set_mem_tranlstion_created(bool flag){ m_mem_tranlstion_created = flag;}
+    void set_mem_tranlstion_finished(bool flag){ m_mem_tranlstion_finished = flag;}
     void set_mem_coalesced(bool flag){ m_mem_coalesced = flag;}
 protected:
 
@@ -1022,6 +1041,8 @@ protected:
 
     //yk: add mmu feature
     bool m_mem_tranlstion_created;
+    bool m_mem_tranlstion_finished;
+
     //yk: the translation path table of each virtual address
     std::list<addr_translation_trace> m_translation_trace;
 
@@ -1029,6 +1050,10 @@ protected:
     //yk: the virtual addresses are coalesced by page size
     //yk: translationq save the coalesced virtual address access
     std::list<mem_access_t> m_translationq;
+
+
+    //yk: translated ready queue
+    std::list<new_addr_type> m_translated_ready_q;
 
     bool m_mem_coalesced;
 

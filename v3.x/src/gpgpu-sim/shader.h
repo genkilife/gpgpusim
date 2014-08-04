@@ -1092,6 +1092,7 @@ class page_table_walker{
         virtual void cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type);
         virtual void push(mem_fetch *mf);
         virtual bool full();
+        virtual void process_fill();
 
         void set_mmutlb(mmu_tlb_cache *mmu_tlb){m_mmu_tlb_cache = mmu_tlb;}
 
@@ -1171,7 +1172,7 @@ public:
                 mem_fetch *mf,
                 unsigned time,
                 std::list<cache_event> &events );
-
+    void fill( mem_fetch *mf, unsigned time );
     class gpgpu_sim *m_gpu;
     unsigned long long& m_cr3;
 protected:

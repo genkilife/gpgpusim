@@ -52,10 +52,12 @@ public:
 };
 
 struct shader_addr_mapping{
-    std::set< new_addr_type > pml4_addr;
-    std::set< new_addr_type > pdt_addr;
-    std::set< new_addr_type > pd_addr;
-    std::set< new_addr_type > pt_addr;
+    std::map< new_addr_type,unsigned int > PML4_addr;
+    std::map< new_addr_type,unsigned int > PDT_addr;
+    std::map< new_addr_type,unsigned int > PD_addr;
+    std::map< new_addr_type,unsigned int > PT_addr;
+
+	std::vector<unsigned int> access_cnt;
 };
 
 
@@ -72,6 +74,12 @@ int main(){
 	char rw;
 	thread_info t_info;
 
+
+	new_addr_type addr_pml4;
+	new_addr_type addr_pdt;
+	new_addr_type addr_pd;
+	new_addr_type addr_pt;
+
 	// Total page
 	std::map< new_addr_type, unsigned int > g_pml4_addr;
 	std::map< new_addr_type, unsigned int > g_pdt_addr;
@@ -87,23 +95,30 @@ int main(){
 		while( fscanf(f_vtl_trace,"%llx %d %d %d %d %d %d %c ",&addr,&t_info.b_x, &t_info.b_y, &t_info.b_z, &t_info.t_x, &t_info.t_y, &t_info.t_z, &rw ) == 8){
 			//add into global data
 
-			if(g_pml4_addr.find( addr & PML4_MASK ) == g_pml4_addr.end()){
-				g_pml4_addr[ addr & PML4_MASK ] = 0;
+			addr_pml4 = addr & PML4_MASK;
+			addr_pdt  = addr & PDT_WHOLE_MASK;
+			addr_pd   = addr & PD_WHOLE_MASK;
+			addr_pt   = addr & PT_WHOLE_MASK;
+
+
+			// set up global relation
+			if(g_pml4_addr.find( addr_pml4 ) == g_pml4_addr.end()){
+				g_pml4_addr[ addr_pml4 ] = 0;
 			}
-			if(g_pdt_addr.find( addr & PDT_WHOLE_MASK ) == g_pdt_addr.end()){
-				g_pdt_addr[ addr & PDT_WHOLE_MASK ] = 0;
+			if(g_pdt_addr.find( addr_pdt ) == g_pdt_addr.end()){
+				g_pdt_addr[ addr_pdt ] = 0;
 			}
-			if(g_pd_addr.find( addr & PD_WHOLE_MASK ) == g_pd_addr.end()){
-				g_pd_addr[ addr & PD_WHOLE_MASK ] = 0;
+			if(g_pd_addr.find( addr_pd ) == g_pd_addr.end()){
+				g_pd_addr[ addr_pd ] = 0;
 			}
-			if(g_pt_addr.find( addr & PT_WHOLE_MASK ) == g_pt_addr.end()){
-				g_pt_addr[ addr & PT_WHOLE_MASK ] = 0;
+			if(g_pt_addr.find( addr_pt ) == g_pt_addr.end()){
+				g_pt_addr[ addr_pt ] = 0;
 			}
 
-			g_pml4_addr[ addr & PML4_MASK ]++;
-			g_pdt_addr[ addr & PDT_WHOLE_MASK ]++;
-			g_pd_addr[ addr & PD_WHOLE_MASK ]++;
-			g_pt_addr[ addr & PT_WHOLE_MASK ]++;
+			g_pml4_addr[ addr_pml4 ]++;
+			g_pdt_addr[ addr_pdt ]++;
+			g_pd_addr[ addr_pd ]++;
+			g_pt_addr[ addr_pt ]++;
 
 			// check weather it is same block
 			if(g_thread_info.find(t_info) == g_thread_info.end()  ){
@@ -112,12 +127,29 @@ int main(){
 				shader_addr_mapping tmp_map;
 				g_shader_addr_map.push_back(tmp_map);
 			}
-			int index_map = g_thread_info[ t_info ];
 
-			g_shader_addr_map[index_map].pml4_addr.insert( addr & PML4_MASK );
-			g_shader_addr_map[index_map].pdt_addr.insert ( addr & PDT_MASK );
-			g_shader_addr_map[index_map].pd_addr.insert  ( addr & PD_MASK );
-			g_shader_addr_map[index_map].pt_addr.insert  ( addr & PT_MASK );
+
+
+			int index_map = g_thread_info[ t_info ];		
+			shader_addr_mapping* shader_mapping = &g_shader_addr_map[index_map];
+
+			if(shader_mapping->PML4_addr.find( addr_pml4 ) == shader_mapping->PML4_addr.end()){
+				shader_mapping->PML4_addr[ addr_pml4 ] = 0;
+			}
+			if(shader_mapping->PDT_addr.find( addr_pdt ) == shader_mapping->PDT_addr.end()){
+				shader_mapping->PDT_addr[ addr_pdt ] = 0;
+			}
+			if(shader_mapping->PD_addr.find( addr_pd ) == shader_mapping->PD_addr.end()){
+				shader_mapping->PD_addr[ addr_pd ] = 0;
+			}
+			if(shader_mapping->PT_addr.find( addr_pt ) == shader_mapping->PT_addr.end()){
+				shader_mapping->PT_addr[ addr_pt ] = 0;
+			}
+
+			shader_mapping->PML4_addr[ addr_pml4 ]++;
+			shader_mapping->PDT_addr [ addr_pdt  ]++;
+			shader_mapping->PD_addr  [ addr_pd   ]++;
+			shader_mapping->PT_addr  [ addr_pt   ]++;
 		}
 
 		//print
@@ -129,7 +161,60 @@ int main(){
 		printf("block_idx: %d\n",block_idx);
 
 
+		// dump memory trace
+	    FILE* f_shader_trace;
+		f_shader_trace = fopen("shader_map_dump.txt","w");
 
+		// only trace pt level
+		// dump whole address space
+
+		fprintf(f_shader_trace, "%d\n", g_pt_addr.size());
+
+		map<new_addr_type, unsigned int>::iterator it_map;
+		for(it_map = g_pt_addr.begin(); it_map != g_pt_addr.end(); it_map++){
+			fprintf(f_shader_trace, "%llx ", it_map->first);
+		}
+		fprintf(f_shader_trace, "\n");
+/*
+		for(int index=0; index < g_shader_addr_map.size(); index++){
+			fprintf(f_shader_trace, "%d\n", g_shader_addr_map[index].PT_addr.size());
+
+			for(it_map = g_shader_addr_map[index].PT_addr.begin(); it_map != g_shader_addr_map[index].PT_addr.end(); it_map++){
+				fprintf(f_shader_trace, "%llx %u ", it_map->first, it_map->second);
+			}
+			fprintf(f_shader_trace, "\n");
+		}
+*/
+
+		// write the correlation code below 
+		std::map< new_addr_type, unsigned int > g_pt_addr_index;
+		int addr_count=0;
+        for(it_map = g_pt_addr.begin(); it_map != g_pt_addr.end(); it_map++,addr_count++){
+			g_pt_addr_index[ it_map->first ] = addr_count;
+        }		
+		//generate the  vector of each shader core
+		for(unsigned int index=0; index < g_shader_addr_map.size(); index++){
+			g_shader_addr_map[index].access_cnt.resize( addr_count ,0);
+
+            for(it_map = g_shader_addr_map[index].PT_addr.begin(); it_map != g_shader_addr_map[index].PT_addr.end(); it_map++){
+				unsigned int bit_index = g_pt_addr_index[ it_map->first ];
+				g_shader_addr_map[index].access_cnt[ bit_index ] = it_map->second;
+            }
+        }
+
+
+
+
+/*
+        for(unsigned int index=0; index < g_shader_addr_map.size(); index++){
+            for(unsigned int bit_index=0; bit_index < g_shader_addr_map[index].access_cnt.size(); bit_index++){
+				fprintf(f_shader_trace, "%u ",g_shader_addr_map[index].access_cnt[bit_index]);
+            }
+			fprintf(f_shader_trace, "\n");
+        }
+*/
+
+/*
 		// check how much page in 1st block exist it 2nd block
 		std::map<thread_info, int>::iterator it= g_thread_info.begin();
 		int index_1stblock = it->second;
@@ -150,6 +235,7 @@ int main(){
 			}
 		}
 		printf("hit: %d, miss: %d, share rate: %lf\n",hit,miss,(float)hit/(float)(miss+hit));
+*/
 	}
 	return 0;
 }

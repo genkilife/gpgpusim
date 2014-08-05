@@ -27,8 +27,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <float.h>
+#include "../abstract_hardware_model.h"
 #include "shader.h"
 #include "gpu-sim.h"
+#include "gpu-cache.h"
 #include "addrdec.h"
 #include "dram.h"
 #include "stat-tool.h"
@@ -1518,7 +1520,9 @@ bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &sta
 {
     m_ptw->process_fill();
     m_ptw->cycle(inst, stall_reason, access_type);
-    return false;
+    if( inst.translated_ready_q_count() != inst.translation_trace_count())
+        stall_reason = COAL_STALL;
+    return (inst.translated_ready_q_count() == inst.translation_trace_count());
 }
 
 //yk: translation stage
@@ -1553,7 +1557,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
    stall_cond = process_translation_access_queue(m_mmuTLB,inst);
 
    //yk: stall_reason & access_type for statistics
-   if( !inst.translationq_empty() )
+   if( !inst.translationq_empty() || (inst.translated_ready_q_count() != inst.translation_trace_count()))
        stall_cond = COAL_STALL;
    if (stall_cond != NO_RC_FAIL) {
       access_type = G_MEM_LD;
@@ -1586,6 +1590,7 @@ bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stal
     // start doing coalescing
     assert( CACHE_UNDEFINED != inst.cache_op );
 
+    stall_reason = NO_RC_FAIL;
     return inst.generate_vtl_mem_accesses();
 }
 
@@ -1851,6 +1856,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
          m_mmuTLB->m_cr3 = core->get_cluster()->get_gpu()->m_cr3_reg;
 
          m_ptw -> set_mmutlb(m_mmuTLB);
+         m_ptw -> set_ldst_unit(this);
     }
 }
 
@@ -3781,7 +3787,6 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
             m_memport->push(mf);
         }
     }
-    m_bandwidth_management.replenish_port_bandwidth();
 }
 void page_table_walker::push(mem_fetch *mf){
     m_waiting_translateq.push_back(mf);

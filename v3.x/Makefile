@@ -141,12 +141,13 @@ no_opencl_support:
 
 $(SIM_LIB_DIR)/libcudart.so: makedirs $(LIBS) cudalib
 	g++ -shared -Wl,-soname,libcudart.so \
+			$(SIM_OBJ_FILES_DIR)/*.o \
 			$(SIM_OBJ_FILES_DIR)/libcuda/*.o \
 			$(SIM_OBJ_FILES_DIR)/cuda-sim/*.o \
 			$(SIM_OBJ_FILES_DIR)/cuda-sim/decuda_pred_table/*.o \
 			$(SIM_OBJ_FILES_DIR)/gpgpu-sim/*.o \
 			$(SIM_OBJ_FILES_DIR)/$(INTERSIM)/*.o \
-			$(SIM_OBJ_FILES_DIR)/*.o -lm -lz -lGL -pthread \
+			  -lm -lz -lGL -pthread \
 			$(MCPAT) \
 			-o $(SIM_LIB_DIR)/libcudart.so
 	if [ ! -f $(SIM_LIB_DIR)/libcudart.so.2 ]; then ln -s libcudart.so $(SIM_LIB_DIR)/libcudart.so.2; fi

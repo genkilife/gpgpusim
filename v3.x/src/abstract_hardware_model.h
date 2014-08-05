@@ -703,10 +703,22 @@ struct dram_callback_t {
 //yk: add translation mapping relation
 class addr_translation_trace{
     public:
-    addr_translation_trace():
-        block_addr(NULL),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),page_addr(NULL),m_page_index(PML4){}
-    addr_translation_trace(new_addr_type block_addr):
-        block_addr(block_addr),pdt_base_addr(NULL), pd_base_addr(NULL),pt_base_addr(NULL),page_addr(NULL),m_page_index(PML4){}
+    addr_translation_trace(){
+        block_addr = NULL;
+        pdt_base_addr = NULL;
+        pd_base_addr = NULL;
+        pt_base_addr = NULL;
+        page_addr = NULL;
+        m_page_index=PML4;
+    }
+    addr_translation_trace(new_addr_type addr){
+        block_addr = addr;
+        pdt_base_addr = NULL;
+        pd_base_addr = NULL;
+        pt_base_addr = NULL;
+        page_addr = NULL;
+        m_page_index=PML4;
+    }
     ~addr_translation_trace();
 
     void set_pdt_addr(new_addr_type base_addr){pdt_base_addr = base_addr;}

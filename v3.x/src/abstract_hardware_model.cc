@@ -346,7 +346,9 @@ bool warp_inst_t::generate_vtl_mem_accesses()
         return true;
     if( m_warp_active_mask.count() == 0 )
         return true; // predicated off
-
+    if( m_mem_coalesced ==true){
+        return true;
+    }
 
     assert( (is_load() || is_store()) && (space.get_type()==global_space) );
     assert( m_per_scalar_thread_valid ); // need address information per thread
@@ -389,7 +391,9 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
     std::set<new_addr_type>::iterator it_addr;
     for(it_addr = mem_vtl_address.begin(); it_addr != mem_vtl_address.end(); it_addr++){
         //yk: generate the mapping table
-        m_translation_trace.push_back(addr_translation_trace(*it_addr));
+        //translation_trace_push_back(*it_addr);
+        //m_translation_trace.push_back(addr_translation_trace(*it_addr));
+        m_translating_address.push_back(*it_addr);
         m_translationq.push_back(mem_access_t(access_type,*it_addr,8,is_write));
     }
     m_mem_coalesced = true;

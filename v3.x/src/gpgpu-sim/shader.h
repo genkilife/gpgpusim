@@ -1083,8 +1083,8 @@ class page_table_walker{
                           unsigned sid,
                           unsigned long long &cr3
                           )
-                : m_memory_config(mem_config),m_icnt(icnt),m_mf_allocator(mf_allocator),m_core(core),
-                    m_sid(sid),m_shader_config(config),m_cr3(cr3){}
+                : m_cr3(cr3),m_memory_config(mem_config),m_icnt(icnt),m_mf_allocator(mf_allocator),m_core(core),m_shader_config(config),
+                  m_sid(sid),m_memport(icnt){}
         ~page_table_walker();
 
 
@@ -1160,7 +1160,7 @@ public:
             int core_id, int type_id, mem_fetch_interface *memport,
             mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw,
                   unsigned long long &cr3)
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_ptw(ptw),m_cr3(cr3){}
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_cr3(cr3),m_ptw(ptw){}
 
     virtual ~mmu_tlb_cache(){}
     virtual void cycle();

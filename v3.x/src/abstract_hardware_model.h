@@ -633,9 +633,6 @@ public:
    enum mem_access_type get_type() const { return m_type; }
    mem_access_byte_mask_t get_byte_mask() const { return m_byte_mask; }
 
-   //yk
-   bool is_pagewalk()const{return m_pagewalk;}
-
 
    void print(FILE *fp) const
    {
@@ -672,8 +669,6 @@ private:
 
    static unsigned sm_next_access_uid;
 
-   //yk: add page walk option
-   bool m_pagewalk;
 };
 
 class mem_fetch;
@@ -1000,9 +995,16 @@ public:
     void translated_ready_q_pop_back() { m_translated_ready_q.pop_back(); }
     void translated_ready_q_push_back(new_addr_type addr){m_translated_ready_q.push_back(addr);}
 
+    unsigned  translating_address_empty()const{return m_translating_address.empty();}
+    unsigned translating_address_count() const { return m_translating_address.size(); }
+    const new_addr_type &translating_address_back() { return m_translating_address.back(); }
+    void translating_address_pop_back() { m_translating_address.pop_back(); }
+
     std::list<mem_access_t>& get_translationq(){return m_translationq;}
     std::list<mem_access_t>& get_accessq(){return m_accessq;}
 
+
+    void translation_trace_push_back(new_addr_type addr){m_translation_trace.push_back(addr_translation_trace(addr));}
 
     bool dispatch_delay()
     { 
@@ -1054,6 +1056,9 @@ protected:
     //yk: add mmu feature
     bool m_mem_tranlstion_created;
     bool m_mem_tranlstion_finished;
+
+    //yk: the address that should be translated, push them at coalesce stage
+    std::list <new_addr_type> m_translating_address;
 
     //yk: the translation path table of each virtual address
     std::list<addr_translation_trace> m_translation_trace;

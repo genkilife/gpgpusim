@@ -1424,10 +1424,12 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    if( (m_core->get_config()->gpgpu_mmu == true) && (inst.space.is_global()==true) ){
         // Inst has not finished coalesce stage
         if(inst.get_mem_tranlstion_created()==false){
+            stall_reason = COAL_STALL;
             return false;
         }
         // Whole addresses havn't been translated
-        if(inst.translation_trace_count() != inst.translated_ready_q_count() ){
+        if(inst.translating_address_count() != inst.translated_ready_q_count() ){
+            stall_reason = COAL_STALL;
             return false;
         }
         // Addresses are all translated
@@ -1520,9 +1522,9 @@ bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &sta
 {
     m_ptw->process_fill();
     m_ptw->cycle(inst, stall_reason, access_type);
-    if( inst.translated_ready_q_count() != inst.translation_trace_count())
+    if( inst.translated_ready_q_count() != inst.translating_address_count())
         stall_reason = COAL_STALL;
-    return (inst.translated_ready_q_count() == inst.translation_trace_count());
+    return (inst.translated_ready_q_count() == inst.translating_address_count());
 }
 
 //yk: translation stage
@@ -1545,7 +1547,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
        return false;
    }
    //yk: if all addresses are translated
-   if(inst.translated_ready_q_count() == inst.translation_trace_count()){
+   if(inst.translated_ready_q_count() == inst.translating_address_count()){
        return true;
    }
 
@@ -1557,16 +1559,17 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
    stall_cond = process_translation_access_queue(m_mmuTLB,inst);
 
    //yk: stall_reason & access_type for statistics
-   if( !inst.translationq_empty() || (inst.translated_ready_q_count() != inst.translation_trace_count()))
+   if( !inst.translationq_empty() || (inst.translated_ready_q_count() != inst.translating_address_count()))
        stall_cond = COAL_STALL;
    if (stall_cond != NO_RC_FAIL) {
+      stall_reason = stall_cond;
       access_type = G_MEM_LD;
    }
 
 
    //yk: 0729 be careful here.
    //yk: If the access is pushed into PTW, this check status will return true.
-   return (inst.translated_ready_q_count() == inst.translation_trace_count());
+   return (inst.translated_ready_q_count() == inst.translating_address_count());
 }
 
 bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
@@ -1590,7 +1593,7 @@ bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stal
     // start doing coalescing
     assert( CACHE_UNDEFINED != inst.cache_op );
 
-    stall_reason = NO_RC_FAIL;
+    stall_reason = COAL_STALL;
     return inst.generate_vtl_mem_accesses();
 }
 
@@ -2097,16 +2100,18 @@ void ldst_unit::cycle()
    done &= texture_cycle(pipe_reg, rc_fail, type);
    //done &= memory_cycle(pipe_reg, rc_fail, type);
 
-
+   bool a0=true,a1=true,a2=true,a3=true;
    if(m_core->get_config()->gpgpu_mmu == true){
       //yk: run original memory cycle
-      done &= memory_cycle(pipe_reg, rc_fail, type);
+      a0 &= memory_cycle(pipe_reg, rc_fail, type);
       //yk: PTW handle page walk
-      done &= mmu_page_walk_cycle(pipe_reg, rc_fail, type);
+      a1 &= mmu_page_walk_cycle(pipe_reg, rc_fail, type);
       //yk: do TLB access and push request into mshr if miss
-      done &= mmu_translate_cycle(pipe_reg, rc_fail, type);
+      a2 &= mmu_translate_cycle(pipe_reg, rc_fail, type);
       //yk: coalesce memory access and push into translationq
-      done &= mmu_coalesce_cycle(pipe_reg, rc_fail, type);
+      a3 &= mmu_coalesce_cycle(pipe_reg, rc_fail, type);
+
+      done &= (a0&a1&a2&a3);
    }
    else{
       done &= memory_cycle(pipe_reg, rc_fail, type);
@@ -3663,7 +3668,7 @@ void mmu_tlb_cache::cycle(){
             new_addr_type target_addr = m_cr3 + offset;
 
             // set page walk property
-            mf->setpagewalk();
+            mf->setpagewalk(true);
             mf->set_addr(target_addr);
             mf->set_data_size(8);
             mf->set_mf_vtl_addr(mf_vtl_addr);
@@ -3726,6 +3731,8 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                         if (m_mmu_tlb_cache->fill_port_free()) {
                             m_mmu_tlb_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
                             m_ldst_unit->m_response_fifo.pop_front();
+
+                            // finish page walk
                             delete mf;
                         }
                     }
@@ -3741,8 +3748,8 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                         new_addr_type mf_addr_cs = mf->get_addr();
                         new_addr_type mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs);
 
-                        assert(mf_addr_cs != NULL && mf_addr_cs != 0x0);
-                        assert(mf_addr_ns != NULL && mf_addr_ns != 0x0);
+                        assert( mf_addr_cs != 0x0);
+                        assert( mf_addr_ns != 0x0);
                         // yk: increase level
                         switch(it->get_page_index()){
                             case PML4:
@@ -3773,6 +3780,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
             assert(it != inst.m_translation_trace.end());
             // generate new mf to main memory
             // or send fill response to mmu tlb
+
         }
     }
 
@@ -3780,10 +3788,18 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
     if ( !m_waiting_translateq.empty() ) {
         mem_fetch *mf = m_waiting_translateq.front();
         if ( !m_memport->full(mf->size(),false) ) {
+            //
+            inst.m_translation_trace.push_back(addr_translation_trace(mf->get_addr()));
+
             m_waiting_translateq.pop_front();
+
+
 
             // before push into main memory
             // check the physical address by cr3 reg
+            // maybe have checked
+
+            // set the page walk flag
             m_memport->push(mf);
         }
     }

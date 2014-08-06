@@ -1487,8 +1487,10 @@ new_addr_type gpgpu_sim::get_phys_data(new_addr_type src_addr){
     assert(src_addr != 0x0);
     it = m_mmu_table.find(src_addr);
     if(it == m_mmu_table.end()){
-        m_mmu_table[ src_addr ] = m_addr_step;
+        new_addr_type target_addr = m_addr_step;
+        m_mmu_table[ src_addr ] = target_addr;
         m_addr_step += 0x1000;
+        return target_addr;
     }
     else{
         return it->second;

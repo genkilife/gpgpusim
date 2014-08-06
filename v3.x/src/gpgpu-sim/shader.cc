@@ -54,6 +54,9 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
     
 
+
+int issue_inst=0;
+
 /////////////////////////////////////////////////////////////////////////////
 
 std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
@@ -1519,8 +1522,17 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
 }
 
 bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
-{
-    m_ptw->process_fill();
+{ 
+    //m_ptw->process_fill();
+    if( m_mmuTLB && m_mmuTLB->access_ready() ) {
+        mem_fetch *mf = m_mmuTLB->next_access();
+
+        //yk: generate new translationq request
+        inst.get_translationq().push_back(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
+        //delete mf;
+    }
+
+
     m_ptw->cycle(inst, stall_reason, access_type);
     if( inst.translated_ready_q_count() != inst.translating_address_count())
         stall_reason = COAL_STALL;
@@ -1621,6 +1633,7 @@ ldst_unit::process_tlb_access( cache_t* cache,
         //0804
         //if hit, modify the access queue address or push into translated queue and call handler to deal it
         inst.translated_ready_q_push_back( address );
+        printf("tlb inst: %d\n",issue_inst);
         delete mf;
     } else if ( status == RESERVATION_FAIL ) {
         result = COAL_STALL;
@@ -1649,7 +1662,10 @@ mem_stage_stall_type ldst_unit::process_translation_access_queue( cache_t *cache
     if( !cache->data_port_free() )
         return DATA_PORT_STALL;
 
-    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
+//    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
+
+    mem_access_t &access = inst.translationq_back();
+    mem_fetch *mf = m_mf_allocator->alloc(access.get_addr(), access.get_type(), access.get_size(), access.is_write());
     std::list<cache_event> events;
     enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
     return process_tlb_access( cache, mf->get_addr(), inst, events, mf, status );
@@ -3674,6 +3690,7 @@ void mmu_tlb_cache::cycle(){
             mf->set_mf_vtl_addr(mf_vtl_addr);
 
             m_ptw->push(mf);
+            printf("issue inst: %d\n",issue_inst++);
         }
     }
 }
@@ -3690,6 +3707,7 @@ mmu_tlb_cache::access( new_addr_type addr,
 //yk: check how does the fill function do
 /// Interface for response from lower memory level (model bandwidth restictions in caller)
 void mmu_tlb_cache::fill(mem_fetch *mf, unsigned time){
+    printf("fill inst: %d\n",issue_inst);
     extra_mf_fields_lookup::iterator e = m_extra_mf_fields.find(mf);
     assert( e != m_extra_mf_fields.end() );
     assert( e->second.m_valid );
@@ -3704,6 +3722,8 @@ void mmu_tlb_cache::fill(mem_fetch *mf, unsigned time){
     m_mshrs.mark_ready(e->second.m_block_addr, has_atomic);
     m_extra_mf_fields.erase(mf);
     m_bandwidth_management.use_fill_port(mf);
+
+
 }
 
 // inst here is from ldst_unit
@@ -3734,6 +3754,8 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
 
                             // finish page walk
                             delete mf;
+
+                            printf("issue inst: %d\n",--issue_inst);
                         }
                     }
                     // If it is the middle level, generate new mf to main memory
@@ -3788,8 +3810,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
     if ( !m_waiting_translateq.empty() ) {
         mem_fetch *mf = m_waiting_translateq.front();
         if ( !m_memport->full(mf->size(),false) ) {
-            //
-            inst.m_translation_trace.push_back(addr_translation_trace(mf->get_addr()));
+            //inst.m_translation_trace.push_back(addr_translation_trace(mf->get_addr()));
 
             m_waiting_translateq.pop_front();
 
@@ -3820,6 +3841,6 @@ void page_table_walker::process_fill(){
 
         //yk: generate new translationq request
         mf->get_inst().get_translationq().push_back(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
-        delete mf;
+        //delete mf;
     }
 }

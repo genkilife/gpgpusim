@@ -714,7 +714,7 @@ class addr_translation_trace{
         page_addr = NULL;
         m_page_index=PML4;
     }
-    ~addr_translation_trace();
+    ~addr_translation_trace(){}
 
     void set_pdt_addr(new_addr_type base_addr){pdt_base_addr = base_addr;}
     void set_pd_addr(new_addr_type base_addr){pd_base_addr = base_addr;}
@@ -853,6 +853,12 @@ public:
         m_translated_ready_q.clear();
     }
     virtual ~warp_inst_t(){
+        m_per_scalar_thread.clear();
+        m_accessq.clear();
+        m_translating_address.clear();
+        m_translated_ready_q.clear();
+        m_translationq.clear();
+        m_translation_trace.clear();
     }
 
     // modifiers
@@ -981,7 +987,7 @@ public:
     //yk: add translation queue function
     bool translationq_empty() const { return m_translationq.empty(); }
     unsigned translationq_count() const { return m_translationq.size(); }
-    const mem_access_t &translationq_back() { return m_translationq.back(); }
+    mem_access_t &translationq_back() { return m_translationq.back(); }
     void translationq_pop_back() { m_translationq.pop_back(); }
 
     unsigned  translation_trace_empty()const{return m_translation_trace.empty();}
@@ -1040,11 +1046,13 @@ protected:
     active_mask_t m_warp_active_mask; // dynamic active mask for timing model (after predication)
     active_mask_t m_warp_issued_mask; // active mask at issue (prior to predication test) -- for instruction counting
 
-    struct per_thread_info {
+    class per_thread_info {
+        public:
         per_thread_info() {
             for(unsigned i=0; i<MAX_ACCESSES_PER_INSN_PER_THREAD; i++)
                 memreqaddr[i] = 0;
         }
+        ~per_thread_info(){}
         dram_callback_t callback;
         new_addr_type memreqaddr[MAX_ACCESSES_PER_INSN_PER_THREAD]; // effective address, upto 8 different requests (to support 32B access in 8 chunks of 4B each)
     };
@@ -1075,6 +1083,7 @@ protected:
     bool m_mem_coalesced;
 
     static unsigned sm_next_uid;
+
 
     friend class page_table_walker;
 };

@@ -1,7 +1,7 @@
 # Please see README.ISPASS-2009 for instructions
 
 BINDIR:=$(shell pwd)/bin/
-BINSUBDIR=release
+BINSUBDIR=debug
 SETENV=export BINDIR=$(BINDIR); \
 	   export ROOTDIR=$(NVIDIA_COMPUTE_SDK_LOCATION)/C/src/; \
 	   export BINSUBDIR=$(BINSUBDIR); \

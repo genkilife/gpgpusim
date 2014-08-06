@@ -39,6 +39,7 @@
 unsigned mem_access_t::sm_next_access_uid = 0;   
 unsigned warp_inst_t::sm_next_uid = 0;
 
+
 void move_warp( warp_inst_t *&dst, warp_inst_t *&src )
 {
    assert( dst->empty() );
@@ -392,7 +393,7 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
     for(it_addr = mem_vtl_address.begin(); it_addr != mem_vtl_address.end(); it_addr++){
         //yk: generate the mapping table
         //translation_trace_push_back(*it_addr);
-        //m_translation_trace.push_back(addr_translation_trace(*it_addr));
+        m_translation_trace.push_back(addr_translation_trace(*it_addr));
         m_translating_address.push_back(*it_addr);
         m_translationq.push_back(mem_access_t(access_type,*it_addr,8,is_write));
     }

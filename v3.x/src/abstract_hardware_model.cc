@@ -397,8 +397,6 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
         m_translating_address.push_back(*it_addr);
         m_translationq.push_back(mem_access_t(access_type,*it_addr,8,is_write));
     }
-
-    printf("translationq size: %d\n",m_translationq.size());
     m_mem_coalesced = true;
 }
 

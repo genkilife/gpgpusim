@@ -342,6 +342,7 @@ mem_fetch *mshr_table::next_access(){
     new_addr_type block_addr = m_current_response.front();
     assert( !m_data[block_addr].m_list.empty() );
     mem_fetch *result = m_data[block_addr].m_list.front();
+
     m_data[block_addr].m_list.pop_front();
     if ( m_data[block_addr].m_list.empty() ) {
         // release entry
@@ -350,6 +351,24 @@ mem_fetch *mshr_table::next_access(){
     }
     return result;
 }
+
+/// Returns next ready access
+mem_fetch *mshr_table::tlb_next_access(){
+    assert( access_ready() );
+    new_addr_type block_addr = m_current_response.front();
+    assert( !m_data[block_addr].m_list.empty() );
+    mem_fetch *result = m_data[block_addr].m_list.front();
+
+    //printf("fill 2nd mf addr: %llx mf->block: %llx mf->vtl: %llx\n",(void*)mf,mf->get_addr(), mf->get_mf_vtl_addr() );
+    m_data[block_addr].m_list.pop_front();
+    if ( m_data[block_addr].m_list.empty() ) {
+        // release entry
+        m_data.erase(block_addr);
+        m_current_response.pop_front();
+    }
+    return result;
+}
+
 
 void mshr_table::display( FILE *fp ) const{
     fprintf(fp,"MSHR contents\n");

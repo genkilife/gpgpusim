@@ -1006,7 +1006,7 @@ public:
     const new_addr_type &translating_address_back() { return m_translating_address.back(); }
     void translating_address_pop_back() { m_translating_address.pop_back(); }
 
-    std::list<mem_access_t>& get_translationq(){return m_translationq;}
+    void translationq_push(mem_access_t u_mem_access){m_translationq.push_back(u_mem_access);}
     std::list<mem_access_t>& get_accessq(){return m_accessq;}
 
 

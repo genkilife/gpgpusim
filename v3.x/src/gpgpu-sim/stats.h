@@ -49,7 +49,6 @@ enum mem_stage_stall_type {
    MSHR_RC_FAIL,
    ICNT_RC_FAIL,
    COAL_STALL,
-   TLB_STALL,
    DATA_PORT_STALL,
    WB_ICNT_RC_FAIL,
    WB_CACHE_RSRV_FAIL,

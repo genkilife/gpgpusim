@@ -1170,6 +1170,7 @@ public:
                 unsigned time,
                 std::list<cache_event> &events );
     void fill( mem_fetch *mf, unsigned time );
+    mem_fetch *next_access(){return m_mshrs.tlb_next_access();}
     class gpgpu_sim *m_gpu;
     unsigned long long& m_cr3;
 protected:

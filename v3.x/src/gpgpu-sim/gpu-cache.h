@@ -390,6 +390,8 @@ public:
     bool access_ready() const {return !m_current_response.empty();}
     /// Returns next ready access
     mem_fetch *next_access();
+
+    mem_fetch *tlb_next_access();
     void display( FILE *fp ) const;
 
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )

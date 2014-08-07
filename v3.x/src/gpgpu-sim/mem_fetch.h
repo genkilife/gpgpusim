@@ -115,8 +115,8 @@ public:
    unsigned get_num_flits(bool simt_to_mem);
 
 
-   new_addr_type get_mf_vtl_addr() const { return m_vtl_addr; }
-   void set_mf_vtl_addr(new_addr_type vtl_addr) { m_vtl_addr = vtl_addr; }
+   const new_addr_type get_mf_vtl_addr() const { return m_vtl_addr; }
+   void set_mf_vtl_addr(new_addr_type vtl_addr) { m_vtl_addr = vtl_addr;}
 private:
    // request source information
    unsigned m_request_uid;

@@ -1526,7 +1526,7 @@ bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &sta
     //m_ptw->process_fill();
     if( m_mmuTLB && m_mmuTLB->access_ready() ) {
         mem_fetch *mf = m_mmuTLB->next_access();
-
+        printf("fill tlb: block addr %llx vtl addr: %llx\n",mf->get_addr(),mf->get_mf_vtl_addr());
         //yk: generate new translationq request
         inst.get_translationq().push_back(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
         //delete mf;
@@ -1633,7 +1633,7 @@ ldst_unit::process_tlb_access( cache_t* cache,
         //0804
         //if hit, modify the access queue address or push into translated queue and call handler to deal it
         inst.translated_ready_q_push_back( address );
-        printf("tlb inst: %d\n",issue_inst);
+        printf("tlb hit inst: %d  address: %llx\n",issue_inst,address);
         delete mf;
     } else if ( status == RESERVATION_FAIL ) {
         result = COAL_STALL;
@@ -1647,6 +1647,7 @@ ldst_unit::process_tlb_access( cache_t* cache,
         // send the request into page table walker
         // wait the fill response, and repush it into translationq to do TLB hit
         inst.translationq_pop_back();
+        printf("tlb miss inst: %d  address: %llx\n",issue_inst,address);
     }
     if( !inst.translationq_empty() )
         result = BK_CONF;
@@ -3690,7 +3691,7 @@ void mmu_tlb_cache::cycle(){
             mf->set_mf_vtl_addr(mf_vtl_addr);
 
             m_ptw->push(mf);
-            printf("issue inst: %d\n",issue_inst++);
+            printf("push issue inst: %d\n",issue_inst++);
         }
     }
 }
@@ -3707,7 +3708,9 @@ mmu_tlb_cache::access( new_addr_type addr,
 //yk: check how does the fill function do
 /// Interface for response from lower memory level (model bandwidth restictions in caller)
 void mmu_tlb_cache::fill(mem_fetch *mf, unsigned time){
-    printf("fill inst: %d\n",issue_inst);
+    //printf("fill inst: %d  mf->addr: %llx  mf->vtl_addr: %llx\n",issue_inst,mf->get_addr(), mf->get_mf_vtl_addr());
+    mf->set_addr( mf->get_mf_vtl_addr() );
+
     extra_mf_fields_lookup::iterator e = m_extra_mf_fields.find(mf);
     assert( e != m_extra_mf_fields.end() );
     assert( e->second.m_valid );
@@ -3723,6 +3726,8 @@ void mmu_tlb_cache::fill(mem_fetch *mf, unsigned time){
     m_extra_mf_fields.erase(mf);
     m_bandwidth_management.use_fill_port(mf);
 
+
+    printf("block_addr: %llx\n",e->second.m_block_addr);
 
 }
 
@@ -3755,7 +3760,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                             // finish page walk
                             delete mf;
 
-                            printf("issue inst: %d\n",--issue_inst);
+                            printf("pop  issue inst: %d\n",issue_inst--);
                         }
                     }
                     // If it is the middle level, generate new mf to main memory
@@ -3770,6 +3775,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                         new_addr_type mf_addr_cs = mf->get_addr();
                         new_addr_type mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs);
 
+                        printf("mf_addr_cs:%llx  mf_addr_ns:%llx\n",mf_addr_cs,mf_addr_ns);
                         assert( mf_addr_cs != 0x0);
                         assert( mf_addr_ns != 0x0);
                         // yk: increase level
@@ -3835,6 +3841,7 @@ bool page_table_walker::full(){
 void page_table_walker::pop(){
     m_waiting_translateq.pop_back();
 }
+/*
 void page_table_walker::process_fill(){
     if( m_mmu_tlb_cache && m_mmu_tlb_cache->access_ready() ) {
         mem_fetch *mf = m_mmu_tlb_cache->next_access();
@@ -3843,4 +3850,4 @@ void page_table_walker::process_fill(){
         mf->get_inst().get_translationq().push_back(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
         //delete mf;
     }
-}
+}*/

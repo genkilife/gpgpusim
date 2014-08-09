@@ -39,7 +39,7 @@ EXECUTABLE	:= AES
 CUFILES		:= aesHost.cu 
 # C/C++ source files (compiled with gcc / c++)
 CCFILES		:= aescuda.cpp  aesCudaUtils.cpp
-LINKFLAGS	:= -L$(BOOST_LIB) -lboost_filesystem$(BOOST_VER)
+LINKFLAGS	:= -L$(BOOST_LIB) -lboost_filesystem$(BOOST_VER) -lboost_system
 
 HDRDIR  	:= 
 NEWLIBDIR  	:= 

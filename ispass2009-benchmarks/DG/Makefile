@@ -51,9 +51,9 @@ MPILNKOPTS := $(shell $(OPENMPI_BINDIR)mpicxx --showme:link) # extract the requi
 N ?= 6
 HOSTNAME=$(shell hostname | awk '/aamodt/ {print 1;} /arch/ {print 1;}')
 ifeq ($(HOSTNAME),1)
-INCLUDES = -Dp_N=$(N) -DNDG3d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR) -I/opt/mpich/include
+INCLUDES = -Dp_N=$(N) -DNDG3d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR) -I/usr/include/mpich
 else
-INCLUDES = -Dp_N=$(N) -DNDG3d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR)  
+INCLUDES = -Dp_N=$(N) -DNDG3d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR) -I/usr/include/mpich
 endif
 
 NEWCC = $(OPENMPI_BINDIR)mpicc

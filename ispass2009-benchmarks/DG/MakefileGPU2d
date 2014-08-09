@@ -45,7 +45,7 @@ LIB             := -lparmetis -lmetis -lm
 HDRDIR  = /home/gyuan/perforce/gpgpu_sim/cuda-sim-dev/tests/gpuDG/include
 NEWLIBDIR  := -L./lib/
 N ?= 6
-CFLAGS = -Dp_N=$(N) -DNDG2d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR) -O3 
+CFLAGS = -Dp_N=$(N) -DNDG2d -DCUDA -I/opt/local/include -I/usr/include/malloc -I$(HDRDIR) -O3 -I/usr/include/mpich
 CUFLAGS = $(CFLAGS)
 
 NEWCC = $(OPENMPI_BINDIR)mpicc

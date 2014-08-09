@@ -1,14 +1,14 @@
 # Please see README.ISPASS-2009 for instructions
 
 BINDIR:=$(shell pwd)/bin/
-BINSUBDIR=debug
+BINSUBDIR=release
 SETENV=export BINDIR=$(BINDIR); \
 	   export ROOTDIR=$(NVIDIA_COMPUTE_SDK_LOCATION)/C/src/; \
 	   export BINSUBDIR=$(BINSUBDIR); \
 	   export BOOST_LIB=/usr/lib64; \
 	   export BOOST_ROOT=/usr/include; \
 	   export BOOST_VER=""; \
-	   export OPENMPI_BINDIR=/usr/lib64/mpi/gcc/openmpi/bin/; 
+	   export OPENMPI_BINDIR=/usr/bin/; 
 noinline?=0
 
 .PHONY: check_environment

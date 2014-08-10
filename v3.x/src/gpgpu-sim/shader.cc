@@ -1558,9 +1558,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
    assert(m_core->get_config()->gpgpu_mmu == true);
 
    if( inst.empty() ||
-       ((inst.space.get_type() != global_space) &&
-        (inst.space.get_type() != local_space) &&
-        (inst.space.get_type() != param_space_local)) )
+       (inst.space.get_type() != global_space) )
        return true;
    if( inst.active_count() == 0 )
        return true;
@@ -1597,9 +1595,7 @@ bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &st
 bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
 {
     if( inst.empty() ||
-        ((inst.space.get_type() != global_space) &&
-         (inst.space.get_type() != local_space) &&
-         (inst.space.get_type() != param_space_local)) )
+        (inst.space.get_type() != global_space))
         return true;
     if( inst.active_count() == 0 )
         return true;

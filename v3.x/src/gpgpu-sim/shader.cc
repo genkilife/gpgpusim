@@ -3699,9 +3699,10 @@ void mmu_tlb_cache::cycle(){
             new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
             new_addr_type target_addr = m_cr3 + offset;
 
-
-            fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
-            fflush(m_gpu->f_trans_addr_dump);
+            if(m_gpu->f_trans_addr_dump != NULL){
+                fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
+                fflush(m_gpu->f_trans_addr_dump);
+            }
             // set page walk property
             mf->setpagewalk(true);
             mf->set_addr(target_addr);

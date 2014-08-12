@@ -458,9 +458,13 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
                           "-1");
    ptx_file_line_stats_options(opp);
 
-    option_parser_register(opp, "-dump_vtl_addr_trace", OPT_BOOL,
-                         &dump_vtl_addr_trace, "Enable dump virtual address trace",
+    option_parser_register(opp, "-dump_phys_addr_trace", OPT_BOOL,
+                         &dump_phys_addr_trace, "Enable dump virtual address trace",
                          "0");
+    option_parser_register(opp, "-dump_phys_addr_trace_name", OPT_CSTR, &dump_phys_addr_trace_name,
+                   "File name of detail address trace dump",
+                   "timingsim_phys_dump.txt");
+
     option_parser_register(opp, "-virtual_addr_feature", OPT_BOOL,
                          &virtual_address_feature, "Enable virtual address system support",
                          "0");
@@ -624,11 +628,13 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
     last_liveness_message_time = 0;
 
-    if(m_config.dump_vtl_addr_trace == 1){
-       f_vtl_dump = fopen("virtual_address_dump.txt","w");
+    if(m_config.dump_phys_addr_trace == 1){
+       f_phys_dump = fopen(m_config.dump_phys_addr_trace_name,"w");
+       f_trans_addr_dump = fopen("mmu_translated_addr.txt","w");
     }
     else{
-       f_vtl_dump = NULL;
+       f_phys_dump = NULL;
+       f_trans_addr_dump = NULL;
     }
     if(m_config.virtual_address_feature == 1){
         virtual_address_feature = TRUE;

@@ -1319,9 +1319,9 @@ ldst_unit::process_cache_access( cache_t* cache,
     if ( status == HIT ) {
         assert( !read_sent );
         inst.accessq_pop_back();
-        if(m_core->get_gpu()->f_vtl_dump != NULL){
+        if(m_core->get_gpu()->f_phys_dump != NULL){
            if(mf->get_inst().space.is_global()==1){
-                fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
+                fprintf(m_core->get_gpu()->f_phys_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
            }
         }
         if ( inst.is_load() ) {
@@ -1340,9 +1340,9 @@ ldst_unit::process_cache_access( cache_t* cache,
         assert( status == MISS || status == HIT_RESERVED );
         //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
         inst.accessq_pop_back();
-        if(m_core->get_gpu()->f_vtl_dump != NULL){
+        if(m_core->get_gpu()->f_phys_dump != NULL){
            if(mf->get_inst().space.is_global()==1){
-               fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
+               fprintf(m_core->get_gpu()->f_phys_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
            }
         }
     }
@@ -1447,10 +1447,10 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
                 class gpgpu_sim *g_gpu = m_core->get_cluster()->get_gpu();
                 new_addr_type g_cr3 =  g_gpu->m_cr3_reg;
 
-                new_addr_type PML4_index = ( (g_vtl_addr >> 39) <<3 ) && ( 0x1ff ) ;
-                new_addr_type PDT_index  = ( (g_vtl_addr >> 30) <<3 ) && ( 0x1ff ) ;
-                new_addr_type PD_index   = ( (g_vtl_addr >> 21) <<3 ) && ( 0x1ff ) ;
-                new_addr_type PT_index   = ( (g_vtl_addr >> 12) <<3 ) && ( 0x1ff ) ;
+                new_addr_type PML4_index = ( (g_vtl_addr >> 39) <<3 ) & ( 0xfff ) ;
+                new_addr_type PDT_index  = ( (g_vtl_addr >> 30) <<3 ) & ( 0xfff ) ;
+                new_addr_type PD_index   = ( (g_vtl_addr >> 21) <<3 ) & ( 0xfff ) ;
+                new_addr_type PT_index   = ( (g_vtl_addr >> 12) <<3 ) & ( 0xfff ) ;
 
                 new_addr_type g_phys_addr;
                 g_phys_addr = g_gpu->get_phys_data(g_cr3       + PML4_index);
@@ -1459,6 +1459,9 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
                 g_phys_addr = g_gpu->get_phys_data(g_phys_addr + PT_index);
                 g_phys_addr = (g_phys_addr & (~0xfff)) | (g_vtl_addr & 0xfff);
 
+
+                //printf("VTL:addr: %llx  phys addr: %llx\n",g_vtl_addr,g_phys_addr);
+                //printf("PML4_index: %d PDT_index: %d PD_index: %d PT_index: %d ",PML4_index, PDT_index, PD_index, PT_index);
                 it_mem_access->set_addr(g_phys_addr);
             }
             inst.set_mem_tranlstion_finished(true);
@@ -1489,9 +1492,9 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
            mem_fetch *mf = m_mf_allocator->alloc(inst,access);
            m_icnt->push(mf);
            inst.accessq_pop_back();
-           if(m_core->get_gpu()->f_vtl_dump != NULL){
+           if(m_core->get_gpu()->f_phys_dump != NULL){
               if(mf->get_inst().space.is_global()==1){
-                  fprintf(m_core->get_gpu()->f_vtl_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
+                  fprintf(m_core->get_gpu()->f_phys_dump, "%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp() );
               }
            }
            //inst.clear_active( access.get_warp_mask() );
@@ -1503,6 +1506,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
               m_core->inc_store_req( inst.warp_id() );
        }
    } else {
+//       printf("mem: phys addr: %llx\n",inst.accessq_back().get_addr());
        assert( CACHE_UNDEFINED != inst.cache_op );
        stall_cond = process_memory_access_queue(m_L1D,inst);
    }
@@ -1539,8 +1543,8 @@ bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &sta
 
     m_ptw->cycle(inst, stall_reason, access_type);
     if( inst.translated_ready_q_count() != inst.translating_address_count()){
-        int u_translatin_count =  inst.translating_address_count();
-        int u_translated_ready_q_count = inst.translated_ready_q_count();
+        //int u_translatin_count =  inst.translating_address_count();
+        //int u_translated_ready_q_count = inst.translated_ready_q_count();
         stall_reason = COAL_STALL;
     }
     else if(inst.translating_address_count()!=0){
@@ -3696,6 +3700,8 @@ void mmu_tlb_cache::cycle(){
             new_addr_type target_addr = m_cr3 + offset;
 
 
+            fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
+            fflush(m_gpu->f_trans_addr_dump);
             // set page walk property
             mf->setpagewalk(true);
             mf->set_addr(target_addr);

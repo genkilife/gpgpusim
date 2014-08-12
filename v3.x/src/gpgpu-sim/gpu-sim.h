@@ -356,7 +356,8 @@ private:
     int gpu_runtime_stat_flag;
 
     //yk: dump virtual address trace
-    bool dump_vtl_addr_trace;
+    bool  dump_phys_addr_trace;
+    char* dump_phys_addr_trace_name;
     //yk: configure virtual address system
     bool virtual_address_feature;
 
@@ -502,8 +503,10 @@ public:
    void change_cache_config(FuncCache cache_config);
    void set_cache_config(std::string kernel_name);
 
-   FILE* f_vtl_dump;
+   FILE* f_phys_dump;
    bool virtual_address_feature;
+
+   FILE* f_trans_addr_dump;
 
    std::map< unsigned long long, unsigned long long > m_mmu_table;
    unsigned long long m_cr3_reg;

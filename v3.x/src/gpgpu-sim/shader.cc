@@ -1218,6 +1218,10 @@ void ldst_unit::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     if(m_L1T)
         m_L1T->get_sub_stats(css);
 }
+void ldst_unit::get_TLB_sub_stats(struct cache_sub_stats &css) const{
+    if(m_mmuTLB)
+        m_mmuTLB->get_sub_stats(css);
+}
 
 void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
 {
@@ -2382,6 +2386,32 @@ void gpgpu_sim::shader_print_cache_stats( FILE *fout ) const{
         fprintf(fout, "\tL1T_total_cache_pending_hits = %u\n", total_css.pending_hits);
         fprintf(fout, "\tL1T_total_cache_reservation_fails = %u\n", total_css.res_fails);
     }
+
+    //yk: print MMU cache info
+    if( m_shader_config->gpgpu_mmu == true){
+        total_css.clear();
+        css.clear();
+        fprintf(fout, "TLB_cache:\n");
+        for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++){
+            m_cluster[i]->get_TLB_sub_stats(css);
+
+            fprintf( stdout, "\tTLB_cache_core[%d]: Access = %d, Miss = %d, Miss_rate = %.3lf, Pending_hits = %u, Reservation_fails = %u\n",
+                     i, css.accesses, css.misses, (double)css.misses / (double)css.accesses, css.pending_hits, css.res_fails);
+
+            total_css += css;
+        }
+        fprintf(fout, "\tTLB_total_cache_accesses = %u\n", total_css.accesses);
+        fprintf(fout, "\tTLB_total_cache_misses = %u\n", total_css.misses);
+        fprintf(fout, "\tTLB_total_cache (accesses -misses )= %u\n", total_css.accesses - total_css.misses);
+        if(total_css.accesses > 0){
+            fprintf(fout, "\tTLB_total_cache_miss_rate = %.4lf\n", (double)total_css.misses / (double)total_css.accesses);
+        }
+        fprintf(fout, "\tTLB_total_cache_pending_hits = %u\n", total_css.pending_hits);
+        fprintf(fout, "\tTLB_total_cache_reservation_fails = %u\n", total_css.res_fails);
+
+        fprintf(fout, "\t##If TLB miss, it will go through ptw and re-send TLB access.\n");
+        total_css.print_port_stats(fout, "\tTLB_cache");
+    }
 }
 
 void gpgpu_sim::shader_print_l1_miss_stat( FILE *fout ) const
@@ -3060,7 +3090,9 @@ void shader_core_ctx::get_L1C_sub_stats(struct cache_sub_stats &css) const{
 void shader_core_ctx::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     m_ldst_unit->get_L1T_sub_stats(css);
 }
-
+void shader_core_ctx::get_TLB_sub_stats(struct cache_sub_stats &css) const{
+    m_ldst_unit->get_TLB_sub_stats(css);
+}
 void shader_core_ctx::get_icnt_power_stats(long &n_simt_to_mem, long &n_mem_to_simt) const{
 	n_simt_to_mem += m_stats->n_simt_to_mem[m_sid];
 	n_mem_to_simt += m_stats->n_mem_to_simt[m_sid];
@@ -3655,7 +3687,17 @@ void simt_core_cluster::get_L1T_sub_stats(struct cache_sub_stats &css) const{
     }
     css = total_css;
 }
-
+void simt_core_cluster::get_TLB_sub_stats(struct cache_sub_stats &css) const{
+    struct cache_sub_stats temp_css;
+    struct cache_sub_stats total_css;
+    temp_css.clear();
+    total_css.clear();
+    for ( unsigned i = 0; i < m_config->n_simt_cores_per_cluster; ++i ) {
+        m_core[i]->get_TLB_sub_stats(temp_css);
+        total_css += temp_css;
+    }
+    css = total_css;
+}
 void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t, unsigned tid)
 {
     if( inst.has_callback(t) ) 
@@ -3844,7 +3886,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                     break;
                 }
             }
-
+            /*
             if(it == inst.m_translation_trace.end()){
                 printf("assert fail\ninst: %llx addr: %llx\n",(void*)&inst, mf_vtrl_addr);
                 for(it = inst.m_translation_trace.begin(); it != inst.m_translation_trace.end();it++){
@@ -3852,7 +3894,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
 
                     printf("block addr: %llx\n",block_addr);
                 }
-            }
+            }*/
             // must have translated address mapping
             assert(it != inst.m_translation_trace.end());
             // generate new mf to main memory

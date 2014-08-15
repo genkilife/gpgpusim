@@ -298,6 +298,7 @@ protected:
     //yk:07/22
     friend class mmu_tlb_cache;
     friend class mmu_l1_cache;
+    friend class mmu_shared_cache;
 };
 
 
@@ -390,8 +391,10 @@ public:
     bool access_ready() const {return !m_current_response.empty();}
     /// Returns next ready access
     mem_fetch *next_access();
-
     mem_fetch *tlb_next_access();
+    mem_fetch *shared_next_access();
+
+    mem_fetch *peek_memory_fetch();
     void display( FILE *fp ) const;
 
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )
@@ -515,9 +518,9 @@ public:
     virtual ~cache_t() {}
     virtual enum cache_request_status access( new_addr_type addr, mem_fetch *mf, unsigned time, std::list<cache_event> &events ) =  0;
 
-    // accessors for cache bandwidth availability 
-    virtual bool data_port_free() const = 0; 
-    virtual bool fill_port_free() const = 0; 
+    // accessors for cache bandwidth availability
+    virtual bool data_port_free() const = 0;
+    virtual bool fill_port_free() const = 0;
 };
 
 bool was_write_sent( const std::list<cache_event> &events );
@@ -1139,4 +1142,7 @@ private:
 
     extra_mf_fields_lookup m_extra_mf_fields;
 };
+
+
+
 #endif

@@ -374,10 +374,25 @@ void shader_core_config::reg_options(class OptionParser * opp)
                    "shador core mmu tlb config "
                    " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq> | none}",
                    "none" );
-    option_parser_register(opp, "-gpgpu_mmu_cache:dl1", OPT_CSTR, & m_mmu_L1D_config.m_config_string,
-                   "shador core mmu L1 cache config "
+    option_parser_register(opp, "-gpgpu_mmu_shared_cache", OPT_BOOL, &gpgpu_mmu_shared_cache,
+             "gpu mmu shared cache (default = off)",
+             "0");
+    option_parser_register(opp, "-gpgpu_mmu_cache:shared", OPT_CSTR, & m_mmu_ShareD_config.m_config_string,
+                   "shador cores mmu shared cache config "
                    " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq> | none}",
                    "none" );
+
+
+    option_parser_register(opp, "-gpgpu_mmu_cache_max_concurrent_access", OPT_INT32, &gpgpu_mmu_cache_max_concurrent_access,
+                            "Set how many port of mmu cache",
+                             "1");
+    option_parser_register(opp, "-gpgpu_mmu_cache_access_latency", OPT_INT32, &gpgpu_mmu_cache_access_latency,
+                            "L2 access latency cycles",
+                             "15");
+    option_parser_register(opp, "-gpgpu_mmu_cache_max_queue_size", OPT_INT32, &gpgpu_mmu_cache_max_queue_size,
+                            "maximum L2 cache queue size",
+                             "32");
+
 }
 
 void gpgpu_sim_config::reg_options(option_parser_t opp)
@@ -600,9 +615,40 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     gpu_deadlock = false;
 
 
+
+
     m_cluster = new simt_core_cluster*[m_shader_config->n_simt_clusters];
     for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
         m_cluster[i] = new simt_core_cluster(this,i,m_shader_config,m_memory_config,m_shader_stats,m_memory_stats);
+
+
+
+    if((m_shader_config->gpgpu_mmu == true) && (m_shader_config->gpgpu_mmu_shared_cache == true)){
+        //yk: suppose that only one ptw in one cluster
+        if(m_shader_config->n_simt_clusters != 1){
+            printf("Only support 1 core per cluster now\n");
+            assert(0);
+        }
+        char SHARED_MMU_CACHE_name[1024];
+        snprintf(SHARED_MMU_CACHE_name, 1024, "Shared MMU cache");
+        //yk: initialize mmu cache
+        m_mmu_shared_cache = new mmu_shared_cache(SHARED_MMU_CACHE_name,m_shader_config->m_mmu_ShareD_config,
+                                                    -1, 0, NULL, NULL, IN_SHARED_MMU_CACHE, m_shader_config->n_simt_clusters,m_cr3_reg,this,
+                                                    m_shader_config->gpgpu_mmu_cache_max_concurrent_access,
+                                                    m_shader_config->gpgpu_mmu_cache_access_latency,
+                                                    m_shader_config->gpgpu_mmu_cache_max_queue_size);
+
+        for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++){
+            assert(m_cluster[i]->get_core(0)->get_ldst_unit()->get_ptw() != NULL);
+            m_mmu_shared_cache->set_ptw(i, m_cluster[i]->get_core(0)->get_ldst_unit()->get_ptw() );
+            m_mmu_shared_cache->set_tlb(i, m_cluster[i]->get_core(0)->get_ldst_unit()->get_mmuTLB() );
+            m_cluster[i]->get_core(0)->get_ldst_unit()->get_mmuTLB()->set_mmu_shared_cache(m_mmu_shared_cache);
+            m_cluster[i]->get_core(0)->get_ldst_unit()->get_ptw()->set_mmu_shared_cache(m_mmu_shared_cache);
+        }
+    }
+    else{
+        m_mmu_shared_cache = NULL;
+    }
 
     m_memory_partition_unit = new memory_partition_unit*[m_memory_config->m_n_mem];
     m_memory_sub_partition = new memory_sub_partition*[m_memory_config->m_n_mem_sub_partition];

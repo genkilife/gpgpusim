@@ -448,6 +448,9 @@ private:
    class memory_partition_unit **m_memory_partition_unit;
    class memory_sub_partition **m_memory_sub_partition;
 
+   //yk : add shared mmu cache
+   class mmu_shared_cache *m_mmu_shared_cache;
+
    std::vector<kernel_info_t*> m_running_kernels;
    unsigned m_last_issued_kernel;
 

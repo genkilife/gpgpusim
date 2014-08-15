@@ -1530,166 +1530,6 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    return inst.accessq_empty(); 
 }
 
-bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
-{ 
-    //m_ptw->process_fill();
-    //The fill function to update TLB
-    if( m_mmuTLB && m_mmuTLB->access_ready() ) {
-        mem_fetch *mf = m_mmuTLB->next_access();
-
-        // The virtual address is strange
-        // printf("fill 3nd mf addr: %llx mf->block: %llx mf->vtl: %llx\n",(void*)mf,mf->get_addr(), mf->get_mf_vtl_addr() );
-        //yk: generate new translationq request
-        inst.translationq_push(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
-        delete mf;
-    }
-
-
-    m_ptw->cycle(inst, stall_reason, access_type);
-    if( inst.translated_ready_q_count() != inst.translating_address_count()){
-        //int u_translatin_count =  inst.translating_address_count();
-        //int u_translated_ready_q_count = inst.translated_ready_q_count();
-        stall_reason = COAL_STALL;
-    }
-    else if(inst.translating_address_count()!=0){
-        inst.set_mem_tranlstion_created(true);
-    }
-    return (inst.translated_ready_q_count() == inst.translating_address_count());
-}
-
-//yk: translation stage
-//yk: This stage refer to mem stage.
-//yk: It send virtual address to TLB/cache to find weather the physical address has been cached.
-bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
-{
-   //yk: this function unit should do address translation
-   assert(m_core->get_config()->gpgpu_mmu == true);
-
-   if( inst.empty() ||
-       (inst.space.get_type() != global_space) )
-       return true;
-   if( inst.active_count() == 0 )
-       return true;
-   //yk: do coalesce first
-   if(inst.get_mem_coalesced() == false){
-       return false;
-   }
-   //yk: if all addresses are translated
-   if(inst.translated_ready_q_count() == inst.translating_address_count()){
-       return true;
-   }
-
-   assert( !inst.accessq_empty() );
-//   assert( !inst.translationq_empty());
-   mem_stage_stall_type stall_cond = NO_RC_FAIL;
-
-   // the memory access
-   stall_cond = process_translation_access_queue(m_mmuTLB,inst);
-
-   //yk: stall_reason & access_type for statistics
-   if( !inst.translationq_empty() || (inst.translated_ready_q_count() != inst.translating_address_count()))
-       stall_cond = COAL_STALL;
-   if (stall_cond != NO_RC_FAIL) {
-      stall_reason = stall_cond;
-      access_type = G_MEM_LD;
-   }
-
-
-   //yk: 0729 be careful here.
-   //yk: If the access is pushed into PTW, this check status will return true.
-   return (inst.translated_ready_q_count() == inst.translating_address_count());
-}
-
-bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
-{
-    if( inst.empty() ||
-        (inst.space.get_type() != global_space))
-        return true;
-    if( inst.active_count() == 0 )
-        return true;
-    if(inst.get_mem_tranlstion_created()){
-        return true;
-    }
-    assert( !inst.accessq_empty() );
-    assert(m_core->get_config()->gpgpu_mmu == true);
-
-    //yk: check whether coalescing finished
-    if(inst.get_mem_coalesced()==true){
-         // coalescing has finished
-         return true;
-    }
-
-    // start doing coalescing
-    assert( CACHE_UNDEFINED != inst.cache_op );
-
-    stall_reason = COAL_STALL;
-    return inst.generate_vtl_mem_accesses();
-}
-
-
-//0804 TLB policy
-//yk: TLB hit will push address into translated ready queue
-//yk: if miss, send request to PTW, pop translationq, after PTW fill TLB, push translationq and redo access
-mem_stage_stall_type
-ldst_unit::process_tlb_access( cache_t* cache,
-                                 new_addr_type address,
-                                 warp_inst_t &inst,
-                                 std::list<cache_event>& events,
-                                 mem_fetch *mf,
-                                 enum cache_request_status status )
-{
-    //yk: 0731: have to add code here.
-    //yk: If it is HIT, should pop mem access of translationq and set translated address to accessq
-
-    mem_stage_stall_type result = NO_RC_FAIL;
-    bool read_sent = was_read_sent(events);
-    if ( status == HIT ) {
-        assert( !read_sent );
-        inst.translationq_pop_back();
-
-        //0804
-        //if hit, modify the access queue address or push into translated queue and call handler to deal it
-        inst.translated_ready_q_push_back( address );
-        //printf("tlb hit inst: %d  address: %llx\n",issue_inst,address);
-        delete mf;
-    } else if ( status == RESERVATION_FAIL ) {
-        result = COAL_STALL;
-        assert( !read_sent );
-        delete mf;
-    } else {
-        assert( status == MISS || status == HIT_RESERVED );
-        //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
-
-        // if it is miss, request is pop out from translationq
-        // send the request into page table walker
-        // wait the fill response, and repush it into translationq to do TLB hit
-        inst.translationq_pop_back();
-        //printf("tlb miss inst: %d  address: %llx\n",issue_inst,address);
-    }
-    if( !inst.translationq_empty() )
-        result = BK_CONF;
-    return result;
-}
-
-mem_stage_stall_type ldst_unit::process_translation_access_queue( cache_t *cache, warp_inst_t &inst )
-{
-    mem_stage_stall_type result = NO_RC_FAIL;
-    if( inst.translationq_empty() )
-        return result;
-
-    if( !cache->data_port_free() )
-        return DATA_PORT_STALL;
-
-//    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
-
-    mem_access_t &access = inst.translationq_back();
-    mem_fetch *mf = m_mf_allocator->alloc(access.get_addr(), access.get_type(), access.get_size(), access.is_write());
-    mf->set_mf_vtl_addr(0x0);
-    //printf("malloc: mf addr: %llx  fill tlb: block addr %llx vtl addr: %llx\n",(void*)mf, mf->get_addr(),mf->get_mf_vtl_addr());
-    std::list<cache_event> events;
-    enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
-    return process_tlb_access( cache, mf->get_addr(), inst, events, mf, status );
-}
 bool ldst_unit::response_buffer_full() const
 {
     return m_response_fifo.size() >= m_config->ldst_unit_response_queue_size;
@@ -1889,7 +1729,8 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                                        m_mf_allocator,
                                        IN_L1D_MISS_QUEUE,
                                        m_ptw,
-                                       core->get_cluster()->get_gpu()->m_cr3_reg
+                                       core->get_cluster()->get_gpu()->m_cr3_reg,
+                                       m_core
                                        );
          m_mmuTLB->m_gpu = core->get_cluster()->get_gpu();
          m_mmuTLB->m_cr3 = core->get_cluster()->get_gpu()->m_cr3_reg;
@@ -3728,35 +3569,233 @@ void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned 
 /******************************************************************************************************************************************/
 /******************************************************************************************************************************************/
 
+bool ldst_unit::mmu_page_walk_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
+{
+    //m_ptw->process_fill();
+    //The fill function to update TLB
+    if( m_mmuTLB && m_mmuTLB->access_ready() ) {
+        mem_fetch *mf = m_mmuTLB->next_access();
+
+        // The virtual address is strange
+        // printf("fill 3nd mf addr: %llx mf->block: %llx mf->vtl: %llx\n",(void*)mf,mf->get_addr(), mf->get_mf_vtl_addr() );
+        //yk: generate new translationq request
+        inst.translationq_push(mem_access_t(GLOBAL_ACC_R, mf->get_mf_vtl_addr(), 8, false));
+        delete mf;
+    }
+
+
+    m_ptw->cycle(inst, stall_reason, access_type);
+    if( inst.translated_ready_q_count() != inst.translating_address_count()){
+        //int u_translatin_count =  inst.translating_address_count();
+        //int u_translated_ready_q_count = inst.translated_ready_q_count();
+        stall_reason = COAL_STALL;
+    }
+    else if(inst.translating_address_count()!=0){
+        inst.set_mem_tranlstion_created(true);
+    }
+    return (inst.translated_ready_q_count() == inst.translating_address_count());
+}
+
+//yk: translation stage
+//yk: This stage refer to mem stage.
+//yk: It send virtual address to TLB/cache to find weather the physical address has been cached.
+bool ldst_unit::mmu_translate_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
+{
+   //yk: this function unit should do address translation
+   assert(m_core->get_config()->gpgpu_mmu == true);
+
+   if( inst.empty() ||
+       (inst.space.get_type() != global_space) )
+       return true;
+   if( inst.active_count() == 0 )
+       return true;
+   //yk: do coalesce first
+   if(inst.get_mem_coalesced() == false){
+       return false;
+   }
+   //yk: if all addresses are translated
+   if(inst.translated_ready_q_count() == inst.translating_address_count()){
+       return true;
+   }
+
+   assert( !inst.accessq_empty() );
+//   assert( !inst.translationq_empty());
+   mem_stage_stall_type stall_cond = NO_RC_FAIL;
+
+   // the memory access
+   stall_cond = process_translation_access_queue(m_mmuTLB,inst);
+
+   //yk: stall_reason & access_type for statistics
+   if( !inst.translationq_empty() || (inst.translated_ready_q_count() != inst.translating_address_count()))
+       stall_cond = COAL_STALL;
+   if (stall_cond != NO_RC_FAIL) {
+      stall_reason = stall_cond;
+      access_type = G_MEM_LD;
+   }
+
+
+   //yk: 0729 be careful here.
+   //yk: If the access is pushed into PTW, this check status will return true.
+   return (inst.translated_ready_q_count() == inst.translating_address_count());
+}
+
+bool ldst_unit::mmu_coalesce_cycle(warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type)
+{
+    if( inst.empty() ||
+        (inst.space.get_type() != global_space))
+        return true;
+    if( inst.active_count() == 0 )
+        return true;
+    if(inst.get_mem_tranlstion_created()){
+        return true;
+    }
+    assert( !inst.accessq_empty() );
+    assert(m_core->get_config()->gpgpu_mmu == true);
+
+    //yk: check whether coalescing finished
+    if(inst.get_mem_coalesced()==true){
+         // coalescing has finished
+         return true;
+    }
+
+    // start doing coalescing
+    assert( CACHE_UNDEFINED != inst.cache_op );
+
+    stall_reason = COAL_STALL;
+    return inst.generate_vtl_mem_accesses();
+}
+
+
+
+
+mem_stage_stall_type ldst_unit::process_translation_access_queue( cache_t *cache, warp_inst_t &inst )
+{
+    mem_stage_stall_type result = NO_RC_FAIL;
+    if( inst.translationq_empty() )
+        return result;
+
+    if( !cache->data_port_free() )
+        return DATA_PORT_STALL;
+
+//    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.translationq_back());
+
+    mem_access_t &access = inst.translationq_back();
+    mem_fetch *mf = m_mf_allocator->alloc(access.get_addr(), access.get_type(), access.get_size(), access.is_write());
+    mf->set_mf_vtl_addr(0x0);
+    //printf("malloc: mf addr: %llx  fill tlb: block addr %llx vtl addr: %llx\n",(void*)mf, mf->get_addr(),mf->get_mf_vtl_addr());
+    std::list<cache_event> events;
+    enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
+    return process_tlb_access( cache, mf->get_addr(), inst, events, mf, status );
+}
+
+//0804 TLB policy
+//yk: TLB hit will push address into translated ready queue
+//yk: if miss, send request to PTW, pop translationq, after PTW fill TLB, push translationq and redo access
+mem_stage_stall_type
+ldst_unit::process_tlb_access( cache_t* cache,
+                                 new_addr_type address,
+                                 warp_inst_t &inst,
+                                 std::list<cache_event>& events,
+                                 mem_fetch *mf,
+                                 enum cache_request_status status )
+{
+    //yk: 0731: have to add code here.
+    //yk: If it is HIT, should pop mem access of translationq and set translated address to accessq
+
+    mem_stage_stall_type result = NO_RC_FAIL;
+    bool read_sent = was_read_sent(events);
+    if ( status == HIT ) {
+        assert( !read_sent );
+        inst.translationq_pop_back();
+
+        //0804
+        //if hit, modify the access queue address or push into translated queue and call handler to deal it
+        inst.translated_ready_q_push_back( address );
+        //printf("tlb hit inst: %d  address: %llx\n",issue_inst,address);
+        delete mf;
+    } else if ( status == RESERVATION_FAIL ) {
+        result = COAL_STALL;
+        assert( !read_sent );
+        delete mf;
+    } else {
+        assert( status == MISS || status == HIT_RESERVED );
+        //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
+
+        // if it is miss, request is pop out from translationq
+        // send the request into page table walker
+        // wait the fill response, and repush it into translationq to do TLB hit
+        inst.translationq_pop_back();
+        //printf("tlb miss inst: %d  address: %llx\n",issue_inst,address);
+    }
+    if( !inst.translationq_empty() )
+        result = BK_CONF;
+    return result;
+}
+
 //yk: 0724 have to modify
 void mmu_tlb_cache::cycle(){
+    // handle fill
+
+
+
+    // send miss to lower level module
     if ( !m_miss_queue.empty() ) {
         mem_fetch *mf = m_miss_queue.front();
-        //here push into PTW unit
-        if(!m_ptw->full()){
-            m_miss_queue.pop_front();
 
-            //get original virtual address
-            new_addr_type mf_vtl_addr = mf->get_addr();
-            new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
-            new_addr_type target_addr = m_cr3 + offset;
+        //0814 push into ptw or mmu cache depends on the configuration
+        if(m_core->get_config()->gpgpu_mmu_shared_cache == true){
+            // push into mmu shared cache
+            if(!m_mmu_shared_cache->full()){
+                m_miss_queue.pop_front();
 
-            if(m_gpu->f_trans_addr_dump != NULL){
-                fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
-                fflush(m_gpu->f_trans_addr_dump);
+                //get original virtual address
+                new_addr_type mf_vtl_addr = mf->get_addr();
+                new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
+                new_addr_type target_addr = m_cr3 + offset;
+
+                if(m_gpu->f_trans_addr_dump != NULL){
+                    fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
+                    fflush(m_gpu->f_trans_addr_dump);
+                }
+                // set page walk property
+                mf->setpagewalk(true);
+                mf->set_addr(target_addr);
+                mf->set_data_size(8);
+                mf->set_mf_vtl_addr(mf_vtl_addr);
+
+                m_mmu_shared_cache->push(mf);
             }
-            // set page walk property
-            mf->setpagewalk(true);
-            mf->set_addr(target_addr);
-            mf->set_data_size(8);
-            mf->set_mf_vtl_addr(mf_vtl_addr);
+        }
+        else{ // mmu_shared_cache == false
+            //here push into PTW unit
+            if(!m_ptw->full()){
+                m_miss_queue.pop_front();
 
-            //printf("push into ptw: mf_vtl: %llx\n",mf->get_mf_vtl_addr());
+                //get original virtual address
+                new_addr_type mf_vtl_addr = mf->get_addr();
+                new_addr_type offset = ((mf_vtl_addr >> 39) << 3);
+                new_addr_type target_addr = m_cr3 + offset;
 
-            m_ptw->push(mf);
-            //printf("push issue inst: %d\n",issue_inst++);
+                if(m_gpu->f_trans_addr_dump != NULL){
+                    fprintf(m_gpu->f_trans_addr_dump,"%016llx %d %d %d\n",mf->get_addr(), mf->get_sid(), mf->get_wid() ,mf->get_timestamp());
+                    fflush(m_gpu->f_trans_addr_dump);
+                }
+                // set page walk property
+                mf->setpagewalk(true);
+                mf->set_addr(target_addr);
+                mf->set_data_size(8);
+                mf->set_mf_vtl_addr(mf_vtl_addr);
+
+                //printf("push into ptw: mf_vtl: %llx\n",mf->get_mf_vtl_addr());
+
+                m_ptw->push(mf);
+                //printf("push issue inst: %d\n",issue_inst++);
+            }
         }
     }
+    bool data_port_busy = !m_bandwidth_management.data_port_free();
+    bool fill_port_busy = !m_bandwidth_management.fill_port_free();
+    m_stats.sample_cache_port_utility(data_port_busy, fill_port_busy);
     m_bandwidth_management.replenish_port_bandwidth();
 }
 enum cache_request_status
@@ -3819,17 +3858,20 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                     new_addr_type mf_addr_ns;
                     // If it is the last level, send fill response to mmu tlb and do physical memory access
                     if(it->get_page_index() == PT){
-                        mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 12)&(0x1ff))<<3) );
-
-                        if (m_mmu_tlb_cache->fill_port_free()) {
-                            m_mmu_tlb_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
-                            m_ldst_unit->m_response_fifo.pop_front();
-                            mf->setpagewalk(false);
-                            // finish page walk
-                            // delete mf;
-
-                            //printf("pop  issue inst: %d\n",issue_inst--);
-                            //printf("inst: %llx mf_addr_cs:%llx  mf_addr_ns:%llx vtl addr: %llx\n",(void*)&inst,mf_addr_cs, mf_addr_ns, mf_vtrl_addr );
+                        // Fill the upper TLB or MMU cache
+                        if(m_shader_config->gpgpu_mmu_shared_cache == true){
+                            if (m_mmu_shared_cache->fill_port_free()) {
+                                m_mmu_shared_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
+                                m_ldst_unit->m_response_fifo.pop_front();
+                            //    mf->setpagewalk(false);
+                            }
+                        }
+                        else{ // gpgpu_mmu_shared_cache == false
+                            if (m_mmu_tlb_cache->fill_port_free()) {
+                                m_mmu_tlb_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
+                                m_ldst_unit->m_response_fifo.pop_front();
+                            //    mf->setpagewalk(false);
+                            }
                         }
                     }
                     // If it is the middle level, generate new mf to main memory
@@ -3848,17 +3890,17 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                         // yk: increase level
                         switch(it->get_page_index()){
                             case PML4:
-                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 39)&(0x1ff))<<3));
+                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 30)&(0x1ff))<<3));
                                 it->set_page_index(PDT);
                                 it->set_pdt_addr(mf_addr_ns);
                                 break;
                             case PDT:
-                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 30)&(0x1ff))<<3));
+                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 21)&(0x1ff))<<3));
                                 it->set_page_index(PD);
                                 it->set_pd_addr(mf_addr_ns);
                                 break;
                             case PD:
-                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 21)&(0x1ff))<<3));
+                                mf_addr_ns = m_gpu->get_phys_data(mf_addr_cs + (((mf_vtrl_addr >> 12)&(0x1ff))<<3));
                                 it->set_page_index(PT);
                                 it->set_pt_addr(mf_addr_ns);
                                 break;
@@ -3942,3 +3984,129 @@ void page_table_walker::process_fill(){
         //delete mf;
     }
 }*/
+void mmu_shared_cache::push(mem_fetch *mf){
+    m_waiting_translateq.push_back(mf);
+    m_waiting_latency.push_back(m_access_latency);
+}
+bool mmu_shared_cache::full(){
+    assert(m_waiting_translateq.size() <= m_max_queue_size);
+    return (m_waiting_translateq.size() ==  m_max_queue_size);
+}
+
+//yk: 0724 have to modify
+void mmu_shared_cache::cycle(){
+
+    // Handling cache miss and push request into corresponding ptw
+    if ( !m_miss_queue.empty() ) {
+        mem_fetch *mf = m_miss_queue.front();
+        //here push into PTW unit
+        // 08/14 check which ptw
+        page_table_walker* ptw_ptr = get_ptw( mf->get_sid() );
+        assert(ptw_ptr != NULL);
+        if( !ptw_ptr->full() ){
+            m_miss_queue.pop_front();
+
+            // set page walk property
+            assert (mf->getpagewalk()== true);
+            assert (mf->get_data_size() == 8);
+
+            ptw_ptr->push(mf);
+        }
+    }
+    bool data_port_busy = !m_bandwidth_management.data_port_free();
+    bool fill_port_busy = !m_bandwidth_management.fill_port_free();
+    m_stats.sample_cache_port_utility(data_port_busy, fill_port_busy);
+    m_bandwidth_management.replenish_port_bandwidth();
+
+    // 0814
+    // Do fill process
+    if()
+    if( access_ready() ) {
+        mem_fetch *mf = peek_memory_fetch();
+        // repush into TLB
+        // check which core issue this mf
+        unsigned mf_sid = mf->get_sid();
+        // find the core has same sid
+        int index = 0;
+        for(index=0; index < m_page_walker_num; index++ ){
+            if(m_tlb_cache_list[ index ]->m_core->get_sid() == mf_sid){
+                break;
+            }
+        }
+        assert(index != m_page_walker_num);
+        if(m_tlb_cache_list[ index ]->fill_port_free()){
+            mf = next_access();
+        }
+        m_tlb_cache_list[ index ]->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
+    }
+
+
+    // Do access process
+    if(m_waiting_translateq.size() != 0){
+        // refresh cycles
+        for(int index=0; (index < m_max_concurrent_access)&&( index < m_waiting_translateq.size()); index++ ){
+            assert(m_waiting_latency[index] >=0);
+            if( m_waiting_latency[index] > 0){
+                m_waiting_latency[index]--;
+            }
+            else{
+                if( !data_port_free()){
+                    continue;
+                }
+                std::list<cache_event> events;
+                mem_fetch *mf = m_waiting_translateq[index];
+                enum cache_request_status status = access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
+
+                bool read_sent = was_read_sent(events);
+                if ( status == HIT ) {
+                    assert( !read_sent );
+                    m_waiting_translateq[index] = NULL;
+                    //if hit, push into fill queue and push back to TLB at calling fill function
+                    m_fillq.push_back( mf );
+                } else if ( status == RESERVATION_FAIL ) {
+                    assert( !read_sent );
+                } else {
+                    assert( status == MISS || status == HIT_RESERVED );
+                    // if it is miss,
+                    // send the request into page table walker
+                    // wait the fill response, and repush it into TLB
+                    m_waiting_translateq[index] = NULL;
+                }
+            }
+        }
+        while((*m_waiting_translateq.begin()) == NULL ){
+            m_waiting_translateq.erase(m_waiting_translateq.begin());
+            m_waiting_latency.erase(m_waiting_latency.begin() );
+        }
+    }
+}
+enum cache_request_status
+mmu_shared_cache::access( new_addr_type addr,
+                  mem_fetch *mf,
+                  unsigned time,
+                  std::list<cache_event> &events )
+{
+    return data_cache::access( addr, mf, time, events );
+}
+
+
+//yk: check how does the fill function do
+/// Interface for response from lower memory level (model bandwidth restictions in caller)
+void mmu_shared_cache::fill(mem_fetch *mf, unsigned time){
+
+
+    extra_mf_fields_lookup::iterator e = m_extra_mf_fields.find(mf);
+    assert( e != m_extra_mf_fields.end() );
+    assert( e->second.m_valid );
+    mf->set_data_size( e->second.m_data_size );
+
+    if ( m_config.m_alloc_policy == ON_MISS )
+        m_tag_array->fill(e->second.m_cache_index,time);
+    else if ( m_config.m_alloc_policy == ON_FILL )
+        m_tag_array->fill(e->second.m_block_addr,time);
+    else abort();
+    bool has_atomic = false;
+    m_mshrs.mark_ready(e->second.m_block_addr, has_atomic);
+    m_extra_mf_fields.erase(mf);
+    m_bandwidth_management.use_fill_port(mf);
+}

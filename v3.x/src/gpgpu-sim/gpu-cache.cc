@@ -369,6 +369,29 @@ mem_fetch *mshr_table::tlb_next_access(){
     return result;
 }
 
+/// Returns next ready access
+mem_fetch *mshr_table::shared_next_access(){
+    assert( access_ready() );
+    new_addr_type block_addr = m_current_response.front();
+    assert( !m_data[block_addr].m_list.empty() );
+    mem_fetch *result = m_data[block_addr].m_list.front();
+
+    m_data[block_addr].m_list.pop_front();
+    if ( m_data[block_addr].m_list.empty() ) {
+        // release entry
+        m_data.erase(block_addr);
+        m_current_response.pop_front();
+    }
+    return result;
+}
+
+mem_fetch *mshr_table::peek_memory_fetch(){
+    assert( access_ready() );
+    new_addr_type block_addr = m_current_response.front();
+    assert( !m_data[block_addr].m_list.empty() );
+    mem_fetch *result = m_data[block_addr].m_list.front();
+    return result;
+}
 
 void mshr_table::display( FILE *fp ) const{
     fprintf(fp,"MSHR contents\n");
@@ -1202,3 +1225,5 @@ void tex_cache::display_state( FILE *fp ) const
     }
 }
 /******************************************************************************************************************************************/
+
+

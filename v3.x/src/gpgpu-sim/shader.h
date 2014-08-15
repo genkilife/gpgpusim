@@ -1068,6 +1068,7 @@ class shader_core_mem_fetch_allocator;
 class cache_t;
 
 class mmu_tlb_cache;
+class mmu_shared_cache;
 class ldst_unit;
 
 //yk: copy the init unit of ldst_unit
@@ -1094,7 +1095,8 @@ class page_table_walker{
         virtual bool full();
         //virtual void process_fill();
 
-        void set_mmutlb(mmu_tlb_cache *mmu_tlb){m_mmu_tlb_cache = mmu_tlb;}
+        void set_mmutlb(mmu_tlb_cache* mmu_tlb){m_mmu_tlb_cache = mmu_tlb;}
+        void set_mmu_shared_cache(mmu_shared_cache* unit_mmu_shared_cache){m_mmu_shared_cache = unit_mmu_shared_cache;}
         void set_ldst_unit(ldst_unit* u_ldst){m_ldst_unit = u_ldst;}
         class gpgpu_sim *m_gpu;
         unsigned long long &m_cr3;
@@ -1148,10 +1150,12 @@ class page_table_walker{
         };
 
         mmu_tlb_cache *m_mmu_tlb_cache;
+        mmu_shared_cache *m_mmu_shared_cache;
         ldst_unit * m_ldst_unit;
 
         friend class warp_inst_t;
 };
+
 
 //yk: borrow l1 model and modify it into tlb module
 class mmu_tlb_cache: public data_cache {
@@ -1159,8 +1163,9 @@ public:
     mmu_tlb_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
             mem_fetch_allocator *mfcreator, enum mem_fetch_status status, page_table_walker *ptw,
-                  unsigned long long &cr3)
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_cr3(cr3),m_ptw(ptw){}
+                  unsigned long long &cr3, shader_core_ctx *core)
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_cr3(cr3),m_ptw(ptw),m_core(core)
+                { m_mmu_shared_cache = NULL;}
 
     virtual ~mmu_tlb_cache(){}
     virtual void cycle();
@@ -1173,8 +1178,13 @@ public:
     mem_fetch *next_access(){return m_mshrs.tlb_next_access();}
     class gpgpu_sim *m_gpu;
     unsigned long long& m_cr3;
+    void set_mmu_shared_cache(mmu_shared_cache * unit_mmu_shared_cache ){ m_mmu_shared_cache = unit_mmu_shared_cache; }
 protected:
     page_table_walker *m_ptw;
+    shader_core_ctx *m_core;
+    mmu_shared_cache * m_mmu_shared_cache;
+
+    friend class mmu_shared_cache;
 };
 
 
@@ -1225,6 +1235,8 @@ public:
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
     void get_TLB_sub_stats(struct cache_sub_stats &css) const;
 
+    mmu_tlb_cache *get_mmuTLB(){return m_mmuTLB;}
+    page_table_walker *get_ptw(){return m_ptw;}
 protected:
     ldst_unit( mem_fetch_interface *icnt,
                shader_core_mem_fetch_allocator *mf_allocator,
@@ -1307,6 +1319,7 @@ protected:
                                                       enum cache_request_status status );
    mem_stage_stall_type process_translation_access_queue( cache_t *cache, warp_inst_t &inst );
 
+   friend class mmu_shared_cache;
    friend class page_table_walker;
 };
 
@@ -1379,6 +1392,7 @@ struct shader_core_config : public core_config
         m_L1C_config.init(m_L1C_config.m_config_string,FuncCachePreferNone);
         m_L1D_config.init(m_L1D_config.m_config_string,FuncCachePreferNone);
         m_mmu_TLB_config.init(m_mmu_TLB_config.m_config_string,FuncCachePreferNone);
+        m_mmu_ShareD_config.init(m_mmu_ShareD_config.m_config_string,FuncCachePreferNone);
         gpgpu_cache_texl1_linesize = m_L1T_config.get_line_sz();
         gpgpu_cache_constl1_linesize = m_L1C_config.get_line_sz();
         m_valid = true;
@@ -1460,8 +1474,14 @@ struct shader_core_config : public core_config
 
     //yk: add mmu feature
     bool gpgpu_mmu;
+    bool gpgpu_mmu_shared_cache;
     mutable cache_config m_mmu_TLB_config;
-    mutable cache_config m_mmu_L1D_config;
+    //yk: shared mmu cache
+    mutable cache_config m_mmu_ShareD_config;
+
+    int gpgpu_mmu_cache_max_concurrent_access;
+    int gpgpu_mmu_cache_access_latency;
+    int gpgpu_mmu_cache_max_queue_size;
 };
 
 struct shader_core_stats_pod {
@@ -1870,6 +1890,7 @@ public:
 
      void inc_simt_to_mem(unsigned n_flits){ m_stats->n_simt_to_mem[m_sid] += n_flits; }
      class simt_core_cluster *get_cluster(){ return  m_cluster;}
+     ldst_unit *get_ldst_unit(){return m_ldst_unit;}
 
 private:
 	 unsigned inactive_lanes_accesses_sfu(unsigned active_count,double latency){
@@ -1966,6 +1987,7 @@ private:
     // is that the dynamic_warp_id is a running number unique to every warp
     // run on this shader, where the warp_id is the static warp slot.
     unsigned m_dynamic_warp_id;
+
 };
 
 class simt_core_cluster {
@@ -2013,6 +2035,7 @@ public:
     void get_TLB_sub_stats(struct cache_sub_stats &css) const;
 
     void get_icnt_stats(long &n_simt_to_mem, long &n_mem_to_simt) const;
+    shader_core_ctx* get_core(int index){return m_core[index];}
 
 private:
     unsigned m_cluster_id;
@@ -2025,6 +2048,8 @@ private:
     unsigned m_cta_issue_next_core;
     std::list<unsigned> m_core_sim_order;
     std::list<mem_fetch*> m_response_fifo;
+
+
 };
 
 class shader_memory_interface : public mem_fetch_interface {
@@ -2065,5 +2090,54 @@ private:
 
 
 inline int scheduler_unit::get_sid() const { return m_shader->get_sid(); }
+
+
+
+//yk: borrow l1 model and modify it into shared module
+class mmu_shared_cache: public data_cache {
+public:
+    mmu_shared_cache(const char *name, cache_config &config,
+            int core_id, int type_id, mem_fetch_interface *memport,
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, int page_walker_num,
+                  unsigned long long &cr3,gpgpu_sim *gpu, int max_concurrent_access, int access_latency, int max_queue_size)
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_page_walker_num(page_walker_num),m_cr3(cr3),m_gpu(gpu),
+                m_max_concurrent_access(max_concurrent_access),m_access_latency(access_latency),m_max_queue_size(max_queue_size){
+         m_ptw_list = new page_table_walker *[page_walker_num];
+         m_tlb_cache_list = new mmu_tlb_cache*[page_walker_num];
+    }
+
+    virtual ~mmu_shared_cache(){delete m_ptw_list;}
+    virtual void cycle();
+    virtual enum cache_request_status
+        access( new_addr_type addr,
+                mem_fetch *mf,
+                unsigned time,
+                std::list<cache_event> &events );
+    void fill( mem_fetch *mf, unsigned time );
+    mem_fetch *next_access(){return m_mshrs.shared_next_access();}
+    mem_fetch *peek_memory_fetch(){return m_mshrs.peek_memory_fetch();}
+    void push(mem_fetch *mf);
+    page_table_walker * get_ptw(int index){return ((index<m_page_walker_num) && (index>=0))?(m_ptw_list[index]):(NULL);}
+    void set_ptw(int index, page_table_walker * ptw){  m_ptw_list[index] = ptw; }
+    void set_tlb(int index, mmu_tlb_cache * tlb){  m_tlb_cache_list[index] = tlb; }
+
+    bool full();
+protected:
+    page_table_walker **m_ptw_list;
+    mmu_tlb_cache ** m_tlb_cache_list;
+    int m_page_walker_num;
+    unsigned long long& m_cr3;
+    class gpgpu_sim *m_gpu;
+
+
+    int m_max_concurrent_access;
+    int m_access_latency;
+    int m_max_queue_size;
+
+    std::vector<mem_fetch*> m_waiting_translateq;
+    std::vector<int>m_waiting_latency;
+
+    std::list<mem_fetch*> m_fillq;
+};
 
 #endif /* SHADER_H */

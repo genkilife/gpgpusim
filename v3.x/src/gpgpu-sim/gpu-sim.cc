@@ -383,13 +383,13 @@ void shader_core_config::reg_options(class OptionParser * opp)
                    "none" );
 
 
-    option_parser_register(opp, "-gpgpu_mmu_cache_max_concurrent_access", OPT_INT32, &gpgpu_mmu_cache_max_concurrent_access,
+    option_parser_register(opp, "-gpgpu_mmu_cache_max_concurrent_access", OPT_UINT32, &gpgpu_mmu_cache_max_concurrent_access,
                             "Set how many port of mmu cache",
                              "1");
     option_parser_register(opp, "-gpgpu_mmu_cache_access_latency", OPT_INT32, &gpgpu_mmu_cache_access_latency,
                             "L2 access latency cycles",
                              "15");
-    option_parser_register(opp, "-gpgpu_mmu_cache_max_queue_size", OPT_INT32, &gpgpu_mmu_cache_max_queue_size,
+    option_parser_register(opp, "-gpgpu_mmu_cache_max_queue_size", OPT_UINT32, &gpgpu_mmu_cache_max_queue_size,
                             "maximum L2 cache queue size",
                              "32");
 
@@ -625,7 +625,7 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
     if((m_shader_config->gpgpu_mmu == true) && (m_shader_config->gpgpu_mmu_shared_cache == true)){
         //yk: suppose that only one ptw in one cluster
-        if(m_shader_config->n_simt_clusters != 1){
+        if(m_shader_config->n_simt_cores_per_cluster != 1){
             printf("Only support 1 core per cluster now\n");
             assert(0);
         }

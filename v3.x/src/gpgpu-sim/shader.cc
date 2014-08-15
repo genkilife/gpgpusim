@@ -4007,7 +4007,7 @@ void mmu_shared_cache::cycle(){
             m_miss_queue.pop_front();
 
             // set page walk property
-            assert (mf->getpagewalk()== true);
+            assert (mf->ispagewalk()== true);
             assert (mf->get_data_size() == 8);
 
             ptw_ptr->push(mf);
@@ -4020,7 +4020,6 @@ void mmu_shared_cache::cycle(){
 
     // 0814
     // Do fill process
-    if()
     if( access_ready() ) {
         mem_fetch *mf = peek_memory_fetch();
         // repush into TLB
@@ -4044,7 +4043,7 @@ void mmu_shared_cache::cycle(){
     // Do access process
     if(m_waiting_translateq.size() != 0){
         // refresh cycles
-        for(int index=0; (index < m_max_concurrent_access)&&( index < m_waiting_translateq.size()); index++ ){
+        for(unsigned index=0; (index < m_max_concurrent_access)&&( index < m_waiting_translateq.size()); index++ ){
             assert(m_waiting_latency[index] >=0);
             if( m_waiting_latency[index] > 0){
                 m_waiting_latency[index]--;

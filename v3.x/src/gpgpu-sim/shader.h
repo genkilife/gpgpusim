@@ -1479,9 +1479,9 @@ struct shader_core_config : public core_config
     //yk: shared mmu cache
     mutable cache_config m_mmu_ShareD_config;
 
-    int gpgpu_mmu_cache_max_concurrent_access;
+    unsigned gpgpu_mmu_cache_max_concurrent_access;
     int gpgpu_mmu_cache_access_latency;
-    int gpgpu_mmu_cache_max_queue_size;
+    unsigned gpgpu_mmu_cache_max_queue_size;
 };
 
 struct shader_core_stats_pod {
@@ -2099,7 +2099,7 @@ public:
     mmu_shared_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
             mem_fetch_allocator *mfcreator, enum mem_fetch_status status, int page_walker_num,
-                  unsigned long long &cr3,gpgpu_sim *gpu, int max_concurrent_access, int access_latency, int max_queue_size)
+                  unsigned long long &cr3,gpgpu_sim *gpu, unsigned max_concurrent_access, int access_latency, unsigned max_queue_size)
             : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_page_walker_num(page_walker_num),m_cr3(cr3),m_gpu(gpu),
                 m_max_concurrent_access(max_concurrent_access),m_access_latency(access_latency),m_max_queue_size(max_queue_size){
          m_ptw_list = new page_table_walker *[page_walker_num];
@@ -2130,9 +2130,9 @@ protected:
     class gpgpu_sim *m_gpu;
 
 
-    int m_max_concurrent_access;
+    unsigned m_max_concurrent_access;
     int m_access_latency;
-    int m_max_queue_size;
+    unsigned m_max_queue_size;
 
     std::vector<mem_fetch*> m_waiting_translateq;
     std::vector<int>m_waiting_latency;

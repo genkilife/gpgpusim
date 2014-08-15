@@ -2102,6 +2102,10 @@ public:
                   unsigned long long &cr3,gpgpu_sim *gpu, unsigned max_concurrent_access, int access_latency, unsigned max_queue_size)
             : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC),m_page_walker_num(page_walker_num),m_cr3(cr3),m_gpu(gpu),
                 m_max_concurrent_access(max_concurrent_access),m_access_latency(access_latency),m_max_queue_size(max_queue_size){
+         if(m_max_concurrent_access!=1){
+            printf("Warnning:   Force max_concurrent_access = 1, only support blocking cache now\n");
+            m_max_concurrent_access = 1;
+         }
          m_ptw_list = new page_table_walker *[page_walker_num];
          m_tlb_cache_list = new mmu_tlb_cache*[page_walker_num];
     }

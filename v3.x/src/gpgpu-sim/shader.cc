@@ -3860,6 +3860,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
                     if(it->get_page_index() == PT){
                         // Fill the upper TLB or MMU cache
                         if(m_shader_config->gpgpu_mmu_shared_cache == true){
+                            printf("gpgpu_mmu_shared_cache response\n");
                             if (m_mmu_shared_cache->fill_port_free()) {
                                 m_mmu_shared_cache->fill(mf,gpu_sim_cycle+gpu_tot_sim_cycle);
                                 m_ldst_unit->m_response_fifo.pop_front();
@@ -3965,6 +3966,7 @@ void page_table_walker::cycle(warp_inst_t &inst, mem_stage_stall_type &stall_rea
     }
 }
 void page_table_walker::push(mem_fetch *mf){
+    printf("ptw push\n");
     m_waiting_translateq.push_back(mf);
 }
 bool page_table_walker::full(){
@@ -3985,6 +3987,7 @@ void page_table_walker::process_fill(){
     }
 }*/
 void mmu_shared_cache::push(mem_fetch *mf){
+    printf("push addr: %llx\n", mf->get_addr());
     m_waiting_translateq.push_back(mf);
     m_waiting_latency.push_back(m_access_latency);
 }
@@ -4042,24 +4045,24 @@ void mmu_shared_cache::cycle(){
 
     // Do access process
     if(m_waiting_translateq.size() != 0){
+
+
+
         // refresh cycles
-        for(unsigned index=0; (index < m_max_concurrent_access)&&( index < m_waiting_translateq.size()); index++ ){
-            assert(m_waiting_latency[index] >=0);
-            if( m_waiting_latency[index] > 0){
-                m_waiting_latency[index]--;
+        //for(unsigned index=0; (index < m_max_concurrent_access)&&( index < m_waiting_translateq.size()); index++ ){
+            assert(m_waiting_latency[0] >=0);
+            if( m_waiting_latency[0] > 0){
+                m_waiting_latency[0]--;
             }
-            else{
-                if( !data_port_free()){
-                    continue;
-                }
+            else if(data_port_free()){
                 std::list<cache_event> events;
-                mem_fetch *mf = m_waiting_translateq[index];
+                mem_fetch *mf = m_waiting_translateq[0];
                 enum cache_request_status status = access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
 
                 bool read_sent = was_read_sent(events);
                 if ( status == HIT ) {
                     assert( !read_sent );
-                    m_waiting_translateq[index] = NULL;
+                    m_waiting_translateq[0] = NULL;
                     //if hit, push into fill queue and push back to TLB at calling fill function
                     m_fillq.push_back( mf );
                 } else if ( status == RESERVATION_FAIL ) {
@@ -4069,14 +4072,11 @@ void mmu_shared_cache::cycle(){
                     // if it is miss,
                     // send the request into page table walker
                     // wait the fill response, and repush it into TLB
-                    m_waiting_translateq[index] = NULL;
+                    m_waiting_translateq.erase(m_waiting_translateq.begin());
+                    m_waiting_latency.erase(m_waiting_latency.begin() );
                 }
             }
-        }
-        while((*m_waiting_translateq.begin()) == NULL ){
-            m_waiting_translateq.erase(m_waiting_translateq.begin());
-            m_waiting_latency.erase(m_waiting_latency.begin() );
-        }
+        //}
     }
 }
 enum cache_request_status

@@ -396,6 +396,8 @@ void warp_inst_t::memory_vtl_generate_accesses( bool is_write, mem_access_type a
         m_translation_trace.push_back(addr_translation_trace(*it_addr));
         m_translating_address.push_back(*it_addr);
         m_translationq.push_back(mem_access_t(access_type,*it_addr,8,is_write));
+
+        assert(*it_addr != 0x0);
     }
     m_mem_coalesced = true;
 }

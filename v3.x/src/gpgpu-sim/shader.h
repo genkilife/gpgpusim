@@ -1154,6 +1154,7 @@ class page_table_walker{
         ldst_unit * m_ldst_unit;
 
         friend class warp_inst_t;
+        friend class mmu_shared_cache;
 };
 
 
@@ -2121,7 +2122,7 @@ public:
     mem_fetch *next_access(){return m_mshrs.shared_next_access();}
     mem_fetch *peek_memory_fetch(){return m_mshrs.peek_memory_fetch();}
     void push(mem_fetch *mf);
-    page_table_walker * get_ptw(int index){return ((index<m_page_walker_num) && (index>=0))?(m_ptw_list[index]):(NULL);}
+    page_table_walker * get_ptw(unsigned sid);
     void set_ptw(int index, page_table_walker * ptw){  m_ptw_list[index] = ptw; }
     void set_tlb(int index, mmu_tlb_cache * tlb){  m_tlb_cache_list[index] = tlb; }
 
@@ -2138,8 +2139,8 @@ protected:
     int m_access_latency;
     unsigned m_max_queue_size;
 
-    std::vector<mem_fetch*> m_waiting_translateq;
-    std::vector<int>m_waiting_latency;
+    std::list<mem_fetch*> m_waiting_translateq;
+    std::list<int>m_waiting_latency;
 
     std::list<mem_fetch*> m_fillq;
 };

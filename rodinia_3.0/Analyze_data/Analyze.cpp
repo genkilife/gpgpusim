@@ -3,12 +3,14 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <cassert>
+
+#include "Analyze.h"
 
 using namespace std;
 
-
 //Definition
-typedef unsigned long long new_addr_type;
+
 
 new_addr_type PML4_MASK = 0xFF8000000000;
 new_addr_type PDT_MASK  = 0x7FC0000000;
@@ -19,51 +21,14 @@ new_addr_type PDT_WHOLE_MASK  = 0xFFFFC0000000;
 new_addr_type PD_WHOLE_MASK   = 0xFFFFFFE00000;
 new_addr_type PT_WHOLE_MASK   = 0xFFFFFFFFF000;
 
-class thread_info {
-public:
-   thread_info(){}
-   ~thread_info(){}
-   bool operator<(const thread_info& b)const{
-      if(this->b_x < b.b_x){
-		return true;
-      }
-	  else if(this->b_x > b.b_x){
-        return false;
-	  }
-	  else{
-        if(this->b_y < b.b_y){
-          return true;
-        }
-		else if(this->b_y > b.b_y){
-		  return false;
-		}
-        else{
-	      if(this->b_z < b.b_z){
-			return true;
-		  }
-		  else{
-			return false;
-		  }
-		}
-      }
-   }
-   int b_x, b_y, b_z;
-   int t_x, t_y, t_z;
-};
-
-struct shader_addr_mapping{
-    std::map< new_addr_type,unsigned int > PML4_addr;
-    std::map< new_addr_type,unsigned int > PDT_addr;
-    std::map< new_addr_type,unsigned int > PD_addr;
-    std::map< new_addr_type,unsigned int > PT_addr;
-
-	std::vector<unsigned int> access_cnt;
-};
-
 
 //configuration
-unsigned int cluster_size = 15;
+#define cluster_size 15
+#define N_LOOP  20
 
+
+unsigned int Distance(shader_addr_mapping* work_group_A,shader_addr_mapping* work_group_B);
+unsigned int min(const unsigned int& ,const unsigned int&);
 //Main code
 int main(){
 
@@ -100,21 +65,6 @@ int main(){
 			addr_pd   = addr & PD_WHOLE_MASK;
 			addr_pt   = addr & PT_WHOLE_MASK;
 
-
-			// set up global relation
-			if(g_pml4_addr.find( addr_pml4 ) == g_pml4_addr.end()){
-				g_pml4_addr[ addr_pml4 ] = 0;
-			}
-			if(g_pdt_addr.find( addr_pdt ) == g_pdt_addr.end()){
-				g_pdt_addr[ addr_pdt ] = 0;
-			}
-			if(g_pd_addr.find( addr_pd ) == g_pd_addr.end()){
-				g_pd_addr[ addr_pd ] = 0;
-			}
-			if(g_pt_addr.find( addr_pt ) == g_pt_addr.end()){
-				g_pt_addr[ addr_pt ] = 0;
-			}
-
 			g_pml4_addr[ addr_pml4 ]++;
 			g_pdt_addr[ addr_pdt ]++;
 			g_pd_addr[ addr_pd ]++;
@@ -124,29 +74,15 @@ int main(){
 			if(g_thread_info.find(t_info) == g_thread_info.end()  ){
 				g_thread_info[ t_info ] = block_idx++;
 
-				shader_addr_mapping tmp_map;
+                shader_addr_mapping tmp_map;
+                tmp_map.t_info = t_info;
 				g_shader_addr_map.push_back(tmp_map);
 			}
-
-
 
 			int index_map = g_thread_info[ t_info ];		
 			shader_addr_mapping* shader_mapping = &g_shader_addr_map[index_map];
 
-			if(shader_mapping->PML4_addr.find( addr_pml4 ) == shader_mapping->PML4_addr.end()){
-				shader_mapping->PML4_addr[ addr_pml4 ] = 0;
-			}
-			if(shader_mapping->PDT_addr.find( addr_pdt ) == shader_mapping->PDT_addr.end()){
-				shader_mapping->PDT_addr[ addr_pdt ] = 0;
-			}
-			if(shader_mapping->PD_addr.find( addr_pd ) == shader_mapping->PD_addr.end()){
-				shader_mapping->PD_addr[ addr_pd ] = 0;
-			}
-			if(shader_mapping->PT_addr.find( addr_pt ) == shader_mapping->PT_addr.end()){
-				shader_mapping->PT_addr[ addr_pt ] = 0;
-			}
-
-			shader_mapping->PML4_addr[ addr_pml4 ]++;
+            shader_mapping->PML4_addr[ addr_pml4 ]++;
 			shader_mapping->PDT_addr [ addr_pdt  ]++;
 			shader_mapping->PD_addr  [ addr_pd   ]++;
 			shader_mapping->PT_addr  [ addr_pt   ]++;
@@ -161,34 +97,10 @@ int main(){
 		printf("block_idx: %d\n",block_idx);
 
 
-		// dump memory trace
-	    FILE* f_shader_trace;
-		f_shader_trace = fopen("shader_map_dump.txt","w");
-
-		// only trace pt level
-		// dump whole address space
-
-		fprintf(f_shader_trace, "%d\n", g_pt_addr.size());
-
-		map<new_addr_type, unsigned int>::iterator it_map;
-		for(it_map = g_pt_addr.begin(); it_map != g_pt_addr.end(); it_map++){
-			fprintf(f_shader_trace, "%llx ", it_map->first);
-		}
-		fprintf(f_shader_trace, "\n");
-/*
-		for(int index=0; index < g_shader_addr_map.size(); index++){
-			fprintf(f_shader_trace, "%d\n", g_shader_addr_map[index].PT_addr.size());
-
-			for(it_map = g_shader_addr_map[index].PT_addr.begin(); it_map != g_shader_addr_map[index].PT_addr.end(); it_map++){
-				fprintf(f_shader_trace, "%llx %u ", it_map->first, it_map->second);
-			}
-			fprintf(f_shader_trace, "\n");
-		}
-*/
-
-		// write the correlation code below 
+        // write the correlation code below
 		std::map< new_addr_type, unsigned int > g_pt_addr_index;
-		int addr_count=0;
+        int addr_count=0;
+        std::map< new_addr_type, unsigned int >::iterator it_map;
         for(it_map = g_pt_addr.begin(); it_map != g_pt_addr.end(); it_map++,addr_count++){
 			g_pt_addr_index[ it_map->first ] = addr_count;
         }		
@@ -202,40 +114,144 @@ int main(){
             }
         }
 
-
-
-
-/*
-        for(unsigned int index=0; index < g_shader_addr_map.size(); index++){
-            for(unsigned int bit_index=0; bit_index < g_shader_addr_map[index].access_cnt.size(); bit_index++){
-				fprintf(f_shader_trace, "%u ",g_shader_addr_map[index].access_cnt[bit_index]);
-            }
-			fprintf(f_shader_trace, "\n");
+        // setup kmeans initialization value
+        shader_addr_mapping* u_center[cluster_size];
+        for(int i=0; i<cluster_size; i++){
+            u_center[i] = & g_shader_addr_map[ i * (g_shader_addr_map.size()/cluster_size) ];
         }
-*/
+        for(int i=0; i < g_shader_addr_map.size(); i++){
+            g_shader_addr_map[i].cluster_id = -1;
+        }
+        std::vector<unsigned int> cluster_avg_vector[cluster_size];
+        std::vector<unsigned int> cluster_access_num;
 
-/*
-		// check how much page in 1st block exist it 2nd block
-		std::map<thread_info, int>::iterator it= g_thread_info.begin();
-		int index_1stblock = it->second;
+        // Calculate cluster center
+        for(int loop = 0; loop < N_LOOP; loop++){
+            for(int i=0; i < cluster_size; i++){
+                cluster_avg_vector[i].resize( g_shader_addr_map[0].access_cnt.size(), 0);
+            }
+            cluster_access_num.resize(cluster_size, 0);
 
-        std::map<thread_info, int>::iterator it_next= ++ g_thread_info.begin() ;
-        int index_2ndblock = it_next->second;
+            // go through each group mapping
+            std::vector< shader_addr_mapping >::iterator it_shader;
+            for(it_shader = g_shader_addr_map.begin(); it_shader != g_shader_addr_map.end(); it_shader++ ){
+                unsigned int max_distance = Distance( &(*it_shader), u_center[0] );
+                int max_index = 0;
 
-		int hit=0,miss=0;
+                for(int cluster_id=1; cluster_id < cluster_size; cluster_id++){
+                    unsigned int dis_tmp = Distance( &(*it_shader), u_center[ cluster_id ] );
+                    // hope to find highly overlap
+                    if( max_distance <  dis_tmp ){
+                        max_distance =  dis_tmp;
+                        max_index = cluster_id;
+                    }
+                }
+                it_shader->cluster_id = max_index;
+                assert(it_shader->access_cnt.size() ==  cluster_avg_vector[max_index].size());
+                for(int index_acc=0; index_acc < it_shader->access_cnt.size(); index_acc++){
+                    cluster_avg_vector[max_index][index_acc] += it_shader->access_cnt[index_acc];
+                }
+                cluster_access_num[ max_index ]++;
+            }
 
-		std::set< new_addr_type >::iterator it_set;
-        for(it_set = g_shader_addr_map[index_1stblock].pt_addr.begin(); it_set != g_shader_addr_map[index_1stblock].pt_addr.end(); ++it_set ){
-			//find if it exist in 2nd block
-			if( g_shader_addr_map[index_2ndblock].pt_addr.find(*it_set) != g_shader_addr_map[index_2ndblock].pt_addr.end() ){
-				hit++;
-			}
-			else{
-				miss++;
-			}
-		}
-		printf("hit: %d, miss: %d, share rate: %lf\n",hit,miss,(float)hit/(float)(miss+hit));
-*/
+            //average the vector
+            for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
+                if(cluster_access_num[idx_cluster] == 0){
+                    continue;
+                }
+                for(int idx_acc=0; idx_acc < cluster_avg_vector[idx_cluster].size(); idx_acc++){
+                    cluster_avg_vector[idx_cluster][idx_acc] /= cluster_access_num[idx_cluster] ;
+                }
+            }
+
+
+            // find the new center of each cluster
+            for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
+                int flag =0;
+                int min_error=0;
+                int min_index=-1;
+
+                for(int idx_map = 0; idx_map < g_shader_addr_map.size(); idx_map++ ){
+                    //check vector in the same cluster
+                    if(g_shader_addr_map[idx_map].cluster_id != idx_cluster){
+                        continue;
+                    }
+                    // find error between avg vector and this vector
+                    int accumulated_error =0;
+                    int error_tmp;
+
+                    for(int idx_acc=0; idx_acc < g_shader_addr_map[idx_map].access_cnt.size(); idx_acc++){
+                        error_tmp = g_shader_addr_map[idx_map].access_cnt[idx_acc] - cluster_avg_vector[idx_cluster][idx_acc];
+                        if(error_tmp < 0){
+                            error_tmp *= -1;
+                        }
+                        accumulated_error += error_tmp;
+                    }
+
+                    if(flag ==0){
+                        min_error =  accumulated_error;
+                        min_index =  idx_map;
+                        flag = 1;
+                    }
+                    else{
+                        if(accumulated_error < min_error){
+                            min_error =  accumulated_error;
+                            min_index =  idx_map;
+                        }
+                    }
+                }
+                if(min_index != -1){
+                    u_center[idx_cluster] = &g_shader_addr_map[ min_index ];
+                }
+            }
+        }
+
+
+       printf("finish clustering\n");
+       for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
+            thread_info* thread = &u_center[idx_cluster]->t_info;
+            printf("cluster id: %d  b.x: %5d b.y: %5d b.z: %5d t.x: %5d t.y: %5d t.z: %5d\n",idx_cluster,
+                    thread->b_x, thread->b_y, thread->b_z, thread->t_x, thread->t_y, thread->t_z);
+       }
+
+
 	}
 	return 0;
 }
+
+
+unsigned int Distance(shader_addr_mapping* mapping_A,shader_addr_mapping* mapping_B){
+
+    assert(mapping_A->access_cnt.size() ==  mapping_B->access_cnt.size());
+    unsigned int distance=0;
+    unsigned int abs_diff;
+    for(int index=0; index < mapping_A->access_cnt.size(); index++){
+        abs_diff = min( mapping_A->access_cnt[index], mapping_B->access_cnt[index]);
+        distance += abs_diff;
+    }
+    return distance;
+}
+unsigned int min(const unsigned int& A, const unsigned int& B){
+
+    if(A > B){
+        return B;
+    }
+    else {
+        return A;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -117,7 +117,7 @@ int main(){
         // setup kmeans initialization value
         shader_addr_mapping* u_center[cluster_size];
         for(int i=0; i<cluster_size; i++){
-            u_center[i] = & g_shader_addr_map[ i * (g_shader_addr_map.size()/cluster_size) ];
+            u_center[i] = & g_shader_addr_map[ ((float)i+0.5) * (g_shader_addr_map.size()/cluster_size) ];
         }
         for(int i=0; i < g_shader_addr_map.size(); i++){
             g_shader_addr_map[i].cluster_id = -1;
@@ -210,8 +210,8 @@ int main(){
        printf("finish clustering\n");
        for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
             thread_info* thread = &u_center[idx_cluster]->t_info;
-            printf("cluster id: %d  b.x: %5d b.y: %5d b.z: %5d t.x: %5d t.y: %5d t.z: %5d\n",idx_cluster,
-                    thread->b_x, thread->b_y, thread->b_z, thread->t_x, thread->t_y, thread->t_z);
+            printf("cluster id: %2d  b.x: %5d b.y: %5d b.z: %5d t.x: %5d t.y: %5d t.z: %5d  cluster_access_num: %d\n",idx_cluster,
+                    thread->b_x, thread->b_y, thread->b_z, thread->t_x, thread->t_y, thread->t_z, cluster_access_num[idx_cluster]);
        }
 
 

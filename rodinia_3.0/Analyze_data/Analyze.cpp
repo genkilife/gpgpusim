@@ -130,6 +130,7 @@ int main(){
             for(int i=0; i < cluster_size; i++){
                 cluster_avg_vector[i].resize( g_shader_addr_map[0].access_cnt.size(), 0);
             }
+            cluster_access_num.clear();
             cluster_access_num.resize(cluster_size, 0);
 
             // go through each group mapping

@@ -1150,7 +1150,7 @@ void shader_core_ctx::mem_instruction_stats(const warp_inst_t &inst)
  * @param kernel 
  *    object that tells us which kernel to ask for a CTA from 
  */
-
+// 0817 yk: issue CTA on shader cores
 void shader_core_ctx::issue_block2core( kernel_info_t &kernel ) 
 {
     set_max_cta(kernel);
@@ -1322,7 +1322,9 @@ void gpgpu_sim::cycle()
       // L1 cache + shader core pipeline stages
       m_power_stats->pwr_mem_stat->core_cache_stats[CURRENT_STAT_IDX].clear();
 
-      m_mmu_shared_cache->cycle();
+      if((m_shader_config->gpgpu_mmu == true) && (m_shader_config->gpgpu_mmu_shared_cache==true) ){
+          m_mmu_shared_cache->cycle();
+      }
       for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) {
          if (m_cluster[i]->get_not_completed() || get_more_cta_left() ) {
                m_cluster[i]->core_cycle();

@@ -1447,6 +1447,7 @@ unsigned ptx_sim_init_thread( kernel_info_t &kernel,
 
    std::map<unsigned,memory_space*> &local_mem_lookup = local_memory_lookup[sid];
    while( kernel.more_threads_in_cta() ) {
+      //yk: 0818 here to choose CTA ID
       dim3 ctaid3d = kernel.get_next_cta_id();
       unsigned new_tid = kernel.get_next_thread_id();
       dim3 tid3d = kernel.get_next_thread_id_3d();

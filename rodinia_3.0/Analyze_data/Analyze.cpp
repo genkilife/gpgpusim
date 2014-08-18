@@ -128,6 +128,7 @@ int main(){
         // Calculate cluster center
         for(int loop = 0; loop < N_LOOP; loop++){
             for(int i=0; i < cluster_size; i++){
+                cluster_avg_vector[i].clear();
                 cluster_avg_vector[i].resize( g_shader_addr_map[0].access_cnt.size(), 0);
             }
             cluster_access_num.clear();
@@ -135,12 +136,12 @@ int main(){
 
             // go through each group mapping
             std::vector< shader_addr_mapping >::iterator it_shader;
-            for(it_shader = g_shader_addr_map.begin(); it_shader != g_shader_addr_map.end(); it_shader++ ){
-                unsigned int max_distance = Distance( &(*it_shader), u_center[0] );
+            for(int idx_map = 0; idx_map < g_shader_addr_map.size(); idx_map++ ){
+                unsigned int max_distance = Distance( &g_shader_addr_map[idx_map], u_center[0] );
                 int max_index = 0;
 
                 for(int cluster_id=1; cluster_id < cluster_size; cluster_id++){
-                    unsigned int dis_tmp = Distance( &(*it_shader), u_center[ cluster_id ] );
+                    unsigned int dis_tmp = Distance( &g_shader_addr_map[idx_map], u_center[ cluster_id ] );
                     // hope to find highly overlap
                     if( max_distance <  dis_tmp ){
                         max_distance =  dis_tmp;

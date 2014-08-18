@@ -9,7 +9,7 @@ EXECUTABLE	:= Analyze_Cluster
 SOURCE := Analyze.cpp
 
 all:
-	g++ -o $(EXECUTABLE) $(SOURCE)
+	g++ -o $(EXECUTABLE) -g  $(SOURCE)
 
 clean:
 	rm $(EXECUTABLE)

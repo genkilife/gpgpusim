@@ -96,7 +96,7 @@ int main(){
 		printf("\n");
 		printf("block_idx: %d\n",block_idx);
 
-
+        assert(block_idx == g_shader_addr_map.size());
         // write the correlation code below
 		std::map< new_addr_type, unsigned int > g_pt_addr_index;
         int addr_count=0;
@@ -135,7 +135,6 @@ int main(){
             cluster_access_num.resize(cluster_size, 0);
 
             // go through each group mapping
-            std::vector< shader_addr_mapping >::iterator it_shader;
             for(int idx_map = 0; idx_map < g_shader_addr_map.size(); idx_map++ ){
                 unsigned int max_distance = Distance( &g_shader_addr_map[idx_map], u_center[0] );
                 int max_index = 0;
@@ -148,10 +147,10 @@ int main(){
                         max_index = cluster_id;
                     }
                 }
-                it_shader->cluster_id = max_index;
-                assert(it_shader->access_cnt.size() ==  cluster_avg_vector[max_index].size());
-                for(int index_acc=0; index_acc < it_shader->access_cnt.size(); index_acc++){
-                    cluster_avg_vector[max_index][index_acc] += it_shader->access_cnt[index_acc];
+                g_shader_addr_map[idx_map].cluster_id = max_index;
+                assert(g_shader_addr_map[idx_map].access_cnt.size() ==  cluster_avg_vector[max_index].size());
+                for(int index_acc=0; index_acc < g_shader_addr_map[idx_map].access_cnt.size(); index_acc++){
+                    cluster_avg_vector[max_index][index_acc] += g_shader_addr_map[idx_map].access_cnt[index_acc];
                 }
                 cluster_access_num[ max_index ]++;
             }

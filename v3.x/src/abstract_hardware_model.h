@@ -149,6 +149,25 @@ struct dim3 {
 };
 #endif
 
+class dim3_select_mask{
+public:
+    dim3_select_mask():
+        active_mask(NULL),lengthX(0),lengthY(0),lengthZ(0)
+        {}
+    dim3_select_mask(unsigned int X,unsigned int Y, unsigned int Z):
+        active_mask(NULL),lengthX(X),lengthY(Y),lengthZ(Z)
+    {
+        //yk: 0818 add constructor code
+    }
+    ~dim3_select_mask(){
+        if(active_mask != NULL){
+            //yk:0818 add destructor code
+        }
+    }
+    bool *** active_mask;
+    unsigned int lengthX,lengthY,lengthZ;
+};
+
 void increment_x_then_y_then_z( dim3 &i, const dim3 &bound);
 
 class kernel_info_t {

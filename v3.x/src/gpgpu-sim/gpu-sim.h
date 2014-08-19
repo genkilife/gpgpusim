@@ -315,6 +315,9 @@ public:
     unsigned num_cluster() const { return m_shader_config.n_simt_clusters; }
     unsigned get_max_concurrent_kernel() const { return max_concurrent_kernel; }
 
+    const bool get_scheduler(void) const {return gpgpusim_workgroup_scheduler;}
+    int get_policy(void) const {return shader_scheduler_policy;}
+    const shader_core_config& get_shader_config()const{return m_shader_config;}
 private:
     void init_clock_domains(void ); 
 
@@ -367,6 +370,9 @@ private:
 
     //yk: add gpgpu mmu flag
     bool gpgpusim_mmu;
+    //yk: add work group scheduler
+    bool gpgpusim_workgroup_scheduler;
+    int shader_scheduler_policy;
 };
 
 class gpgpu_sim : public gpgpu_t {

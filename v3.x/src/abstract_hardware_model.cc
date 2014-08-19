@@ -605,6 +605,7 @@ void warp_inst_t::completed( unsigned long long cycle ) const
 unsigned kernel_info_t::m_next_uid = 1;
 
 kernel_info_t::kernel_info_t( dim3 gridDim, dim3 blockDim, class function_info *entry )
+    : m_cta_active_mask(gridDim.x, gridDim.y, gridDim.z)
 {
     m_kernel_entry=entry;
     m_grid_dim=gridDim;
@@ -616,12 +617,79 @@ kernel_info_t::kernel_info_t( dim3 gridDim, dim3 blockDim, class function_info *
     m_num_cores_running=0;
     m_uid = m_next_uid++;
     m_param_mem = new memory_space_impl<8192>("param",64*1024);
+    m_scheduler_next_cta = m_next_cta;
 }
 
 kernel_info_t::~kernel_info_t()
 {
     assert( m_active_threads.empty() );
     delete m_param_mem;
+}
+
+void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,core_t *core )
+{
+    bool *** active_mask = m_cta_active_mask.active_mask;
+
+    unsigned int posX=0, posY=0, posZ=0;
+    unsigned int count_step=0;
+    const shader_core_config & shader_config = core->get_gpu()->get_config().get_shader_config();
+    const unsigned int total_core = shader_config.n_simt_cores_per_cluster * shader_config.n_simt_clusters;
+
+
+    //yk: use mask to choose the best block location
+    switch(policy){
+        case NONE:
+            m_scheduler_next_cta = m_next_cta;
+            return;
+            break;
+        case X_DIMENSION:
+            posX = (m_grid_dim.x / total_core) * sid;
+            //go through maks to find available block
+            count_step=0;
+            while( count_step != m_grid_dim.x ){
+                for(posY=0; posY < m_grid_dim.y; posY++){
+                    for(posZ=0; posZ < m_grid_dim.z; posZ++){
+                        if(active_mask[posX][posY][posZ] == 0){
+                            m_scheduler_next_cta.x = posX;
+                            m_scheduler_next_cta.y = posY;
+                            m_scheduler_next_cta.z = posZ;
+                            active_mask[posX][posY][posZ] = 1;
+                            return;
+                        }
+                    }
+                }
+                posX = ( posX+1 ) % m_grid_dim.x;
+                count_step++;
+            }
+            break;
+        case Y_DIMENSION:
+            posY = (m_grid_dim.y / total_core) * sid;
+            //go through maks to find available block
+            count_step=0;
+            while( count_step != m_grid_dim.y ){
+                for(posX=0; posX < m_grid_dim.x; posX++){
+                    for(posZ=0; posZ < m_grid_dim.z; posZ++){
+                        if(active_mask[posX][posY][posZ] == 0){
+                            m_scheduler_next_cta.x = posX;
+                            m_scheduler_next_cta.y = posY;
+                            m_scheduler_next_cta.z = posZ;
+                            active_mask[posX][posY][posZ] = 1;
+                            return;
+                        }
+                    }
+                }
+                posY = ( posY+1 ) % m_grid_dim.y;
+                count_step++;
+            }
+            break;
+        default:
+            m_scheduler_next_cta = m_next_cta;
+            return;
+    }
+
+    // should find available block above
+    printf("should find available block above\n");
+    assert(0);
 }
 
 std::string kernel_info_t::name() const

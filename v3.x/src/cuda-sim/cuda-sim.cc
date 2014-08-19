@@ -1446,9 +1446,23 @@ unsigned ptx_sim_init_thread( kernel_info_t &kernel,
    }
 
    std::map<unsigned,memory_space*> &local_mem_lookup = local_memory_lookup[sid];
+
+   //yk: set new cta id here by my scheduler
+   if(core->get_gpu()->get_config().get_scheduler()==true){
+       kernel.scheduler_set_next_cta_id(sid , (scheduler_policy)core->get_gpu()->get_config().get_policy(), core);
+   }
+
    while( kernel.more_threads_in_cta() ) {
       //yk: 0818 here to choose CTA ID
-      dim3 ctaid3d = kernel.get_next_cta_id();
+      //yk: 0819 add configuration to decide how to choose cta_id
+      dim3 ctaid3d;
+      if(core->get_gpu()->get_config().get_scheduler()==false){
+          ctaid3d = kernel.get_next_cta_id();
+      }
+      else{
+          ctaid3d = kernel.scheduler_get_next_cta_id();
+      }
+
       unsigned new_tid = kernel.get_next_thread_id();
       dim3 tid3d = kernel.get_next_thread_id_3d();
       kernel.increment_thread_id();
@@ -1492,7 +1506,11 @@ unsigned ptx_sim_init_thread( kernel_info_t &kernel,
       fflush(stdout);
    }
 
-   kernel.increment_cta_id();
+   // yk: use original function to process cta_id, only modify get function to fetch my scheduler cta id
+   //if(core->get_gpu()->get_config()->get_scheduler() == false){
+
+      kernel.increment_cta_id();
+   //}
 
    assert( active_threads.size() <= threads_left );
    *thread_info = active_threads.front();

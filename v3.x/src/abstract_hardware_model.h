@@ -135,6 +135,13 @@ enum page_index{
     PHYS=4
 };
 
+
+enum scheduler_policy{
+    NONE =0 ,
+    X_DIMENSION = 1,
+    Y_DIMENSION =2
+};
+
 #include <bitset>
 #include <list>
 #include <vector>
@@ -149,19 +156,36 @@ struct dim3 {
 };
 #endif
 
-class dim3_select_mask{
+class dim3_active_mask{
 public:
-    dim3_select_mask():
+    dim3_active_mask():
         active_mask(NULL),lengthX(0),lengthY(0),lengthZ(0)
         {}
-    dim3_select_mask(unsigned int X,unsigned int Y, unsigned int Z):
+    dim3_active_mask(unsigned int X,unsigned int Y, unsigned int Z):
         active_mask(NULL),lengthX(X),lengthY(Y),lengthZ(Z)
     {
         //yk: 0818 add constructor code
+        active_mask = new bool**[lengthX];
+        for(unsigned int x_dim=0; x_dim < lengthX; x_dim++){
+            active_mask[x_dim] = new bool*[lengthY];
+            for(unsigned int y_dim=0; y_dim < lengthY; y_dim++){
+                active_mask[x_dim][y_dim] = new bool[lengthZ];
+                for(unsigned int z_dim=0; z_dim < lengthZ; z_dim++){
+                    active_mask[x_dim][y_dim][z_dim] = 0;
+                }
+            }
+        }
     }
-    ~dim3_select_mask(){
+    ~dim3_active_mask(){
         if(active_mask != NULL){
             //yk:0818 add destructor code
+            for(unsigned int x_dim=0; x_dim < lengthX; x_dim++){
+                for(unsigned int y_dim=0; y_dim < lengthY; y_dim++){
+                    delete [] active_mask[x_dim][y_dim];
+                }
+                delete [] active_mask[x_dim];
+            }
+           delete [] active_mask;
         }
     }
     bool *** active_mask;
@@ -169,7 +193,7 @@ public:
 };
 
 void increment_x_then_y_then_z( dim3 &i, const dim3 &bound);
-
+class core_t;
 class kernel_info_t {
 public:
 //   kernel_info_t()
@@ -239,6 +263,8 @@ public:
    std::list<class ptx_thread_info *> &active_threads() { return m_active_threads; }
    class memory_space *get_param_memory() { return m_param_mem; }
 
+   dim3 scheduler_get_next_cta_id() const { return m_scheduler_next_cta; }
+   void scheduler_set_next_cta_id(int sid, scheduler_policy policy,core_t*);
 private:
    kernel_info_t( const kernel_info_t & ); // disable copy constructor
    void operator=( const kernel_info_t & ); // disable copy operator
@@ -253,10 +279,15 @@ private:
    dim3 m_next_cta;
    dim3 m_next_tid;
 
+
+
    unsigned m_num_cores_running;
 
    std::list<class ptx_thread_info *> m_active_threads;
    class memory_space *m_param_mem;
+
+   dim3_active_mask m_cta_active_mask;
+   dim3 m_scheduler_next_cta;
 };
 
 struct core_config {

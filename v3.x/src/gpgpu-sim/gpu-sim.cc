@@ -486,6 +486,12 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
     option_parser_register(opp, "-gpgpusim_mmu", OPT_BOOL, &gpgpusim_mmu,
              "gpu mmu feature (default = off)",
              "0");
+    option_parser_register(opp, "-gpgpusim_workgroup_scheduler", OPT_BOOL, &gpgpusim_workgroup_scheduler,
+             "gpu work group scheduler feature (default = off)",
+             "0");
+    option_parser_register(opp, "-shader_scheduler_policy", OPT_INT32, &shader_scheduler_policy,
+             "gpu work group scheduler policy (default = off)",
+             "0");
 }
 
 /////////////////////////////////////////////////////////////////////////////

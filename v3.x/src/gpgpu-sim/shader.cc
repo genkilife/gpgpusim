@@ -4011,6 +4011,7 @@ page_table_walker * mmu_shared_cache::get_ptw(unsigned sid){
         }
     }
     assert(index != m_page_walker_num);
+    return NULL;
 }
 
 //yk: 0724 have to modify

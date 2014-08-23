@@ -316,6 +316,7 @@ public:
     unsigned get_max_concurrent_kernel() const { return max_concurrent_kernel; }
 
     const bool get_scheduler(void) const {return gpgpusim_workgroup_scheduler;}
+    const bool get_bloom_scheduler(void) const{return gpgpusim_bloomfilter_scheduler;}
     int get_policy(void) const {return shader_scheduler_policy;}
     const shader_core_config& get_shader_config()const{return m_shader_config;}
 private:
@@ -373,6 +374,9 @@ private:
     //yk: add work group scheduler
     bool gpgpusim_workgroup_scheduler;
     int shader_scheduler_policy;
+
+    //yk: add bloom filter runtime scheduler
+    bool gpgpusim_bloomfilter_scheduler;
 };
 
 class gpgpu_sim : public gpgpu_t {

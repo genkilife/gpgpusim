@@ -288,6 +288,9 @@ private:
 
    dim3_active_mask m_cta_active_mask;
    dim3 m_scheduler_next_cta;
+
+   //yk: add bloom filter
+   bool m_schedule_strategy_on;
 };
 
 struct core_config {

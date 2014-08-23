@@ -618,6 +618,7 @@ kernel_info_t::kernel_info_t( dim3 gridDim, dim3 blockDim, class function_info *
     m_uid = m_next_uid++;
     m_param_mem = new memory_space_impl<8192>("param",64*1024);
     m_scheduler_next_cta = m_next_cta;
+    m_schedule_strategy_on = false;
 }
 
 kernel_info_t::~kernel_info_t()

@@ -492,6 +492,9 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
     option_parser_register(opp, "-shader_scheduler_policy", OPT_INT32, &shader_scheduler_policy,
              "gpu work group scheduler policy (default = off)",
              "0");
+    option_parser_register(opp, "-gpgpusim_bloomfilter_scheduler", OPT_BOOL, &gpgpusim_bloomfilter_scheduler,
+             "gpu bloom filter scheduler feature (default = off)",
+             "0");
 }
 
 /////////////////////////////////////////////////////////////////////////////

@@ -712,7 +712,8 @@ void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,
                 m_cluster_addr[index].clear();
             }
 
-            printf("Finish one line\n");
+            printf("Finish Default policy\n");
+            printf("scheduler: gpu_sim_cycle: %lld\nscheduler: gpu_tot_sim_cycle: %lld\n",gpu_sim_cycle,gpu_tot_sim_cycle);
             m_schedule_strategy_on = true;
             count_selected_CTA = 0;
         }

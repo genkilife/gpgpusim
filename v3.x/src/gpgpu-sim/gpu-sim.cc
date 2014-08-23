@@ -653,6 +653,7 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
             m_mmu_shared_cache->set_tlb(i, m_cluster[i]->get_core(0)->get_ldst_unit()->get_mmuTLB() );
             m_cluster[i]->get_core(0)->get_ldst_unit()->get_mmuTLB()->set_mmu_shared_cache(m_mmu_shared_cache);
             m_cluster[i]->get_core(0)->get_ldst_unit()->get_ptw()->set_mmu_shared_cache(m_mmu_shared_cache);
+            m_cluster[i]->get_core(0)->get_ldst_unit()->set_mmu_shared_cache(m_mmu_shared_cache);
         }
     }
     else{

@@ -1222,6 +1222,10 @@ void ldst_unit::get_TLB_sub_stats(struct cache_sub_stats &css) const{
     if(m_mmuTLB)
         m_mmuTLB->get_sub_stats(css);
 }
+void ldst_unit::get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const{
+    if(m_mmu_shared_cache)
+        m_mmu_shared_cache->get_sub_stats(css);
+}
 
 void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
 {
@@ -1442,6 +1446,8 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
         }
         // Addresses are all translated
         if(inst.get_mem_tranlstion_finished() == false){
+
+
             //translate memory address in accessq
             std::list<mem_access_t>& inst_accessq = inst.get_accessq();
 
@@ -1450,6 +1456,15 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
                 new_addr_type g_vtl_addr = it_mem_access->get_addr();
                 class gpgpu_sim *g_gpu = m_core->get_cluster()->get_gpu();
                 new_addr_type g_cr3 =  g_gpu->m_cr3_reg;
+
+
+                //yk: here update CTA scheduler information
+                if(m_core->get_gpu()->get_config().get_bloom_scheduler() == true){
+                    // push memory access address to Grid Kernel for updating schduler state
+                    m_core->get_kernel()->push_address_info( m_sid, g_vtl_addr );
+
+                }
+
 
                 new_addr_type PML4_index = ( (g_vtl_addr >> 39) <<3 ) & ( 0xfff ) ;
                 new_addr_type PDT_index  = ( (g_vtl_addr >> 30) <<3 ) & ( 0xfff ) ;
@@ -1670,6 +1685,9 @@ void ldst_unit::init( mem_fetch_interface *icnt,
     m_next_global=NULL;
     m_last_inst_gpu_sim_cycle=0;
     m_last_inst_gpu_tot_sim_cycle=0;
+    m_mmuTLB = NULL;
+    m_mmu_shared_cache = NULL;
+    m_ptw = NULL;
 }
 
 
@@ -2065,6 +2083,8 @@ void shader_core_ctx::register_cta_thread_exit( unsigned cta_num )
       shader_CTA_count_unlog(m_sid, 1);
       printf("GPGPU-Sim uArch: Shader %d finished CTA #%d (%lld,%lld), %u CTAs running\n", m_sid, cta_num, gpu_sim_cycle, gpu_tot_sim_cycle,
              m_n_active_cta );
+      m_kernel->inc_count_selected_CTA();
+      //yk: here
       if( m_n_active_cta == 0 ) {
           assert( m_kernel != NULL );
           m_kernel->dec_running();
@@ -2252,6 +2272,28 @@ void gpgpu_sim::shader_print_cache_stats( FILE *fout ) const{
 
         fprintf(fout, "\t##If TLB miss, it will go through ptw and re-send TLB access.\n");
         total_css.print_port_stats(fout, "\tTLB_cache");
+    }
+    if( m_shader_config->gpgpu_mmu_shared_cache == true){
+        total_css.clear();
+        css.clear();
+        fprintf(fout, "Share MMU cache:\n");
+        for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++){
+            m_cluster[i]->get_SHARE_MMU_CACHE_sub_stats(css);
+
+            fprintf( stdout, "\tShare_MMU_cache_core[%d]: Access = %d, Miss = %d, Miss_rate = %.3lf, Pending_hits = %u, Reservation_fails = %u\n",
+                     i, css.accesses, css.misses, (double)css.misses / (double)css.accesses, css.pending_hits, css.res_fails);
+
+            total_css += css;
+        }
+        fprintf(fout, "\tShare_MMU_cache_total_cache_accesses = %u\n", total_css.accesses);
+        fprintf(fout, "\tShare_MMU_cache_total_cache_misses = %u\n", total_css.misses);
+        if(total_css.accesses > 0){
+            fprintf(fout, "\tShare_MMU_cache_total_cache_miss_rate = %.4lf\n", (double)total_css.misses / (double)total_css.accesses);
+        }
+        fprintf(fout, "\tShare_MMU_cache_total_cache_pending_hits = %u\n", total_css.pending_hits);
+        fprintf(fout, "\tShare_MMU_cache_total_cache_reservation_fails = %u\n", total_css.res_fails);
+
+        total_css.print_port_stats(fout, "\tShare_MMU_cache");
     }
 }
 
@@ -2934,6 +2976,9 @@ void shader_core_ctx::get_L1T_sub_stats(struct cache_sub_stats &css) const{
 void shader_core_ctx::get_TLB_sub_stats(struct cache_sub_stats &css) const{
     m_ldst_unit->get_TLB_sub_stats(css);
 }
+void shader_core_ctx::get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const{
+    m_ldst_unit->get_SHARE_MMU_CACHE_sub_stats(css);
+}
 void shader_core_ctx::get_icnt_power_stats(long &n_simt_to_mem, long &n_mem_to_simt) const{
 	n_simt_to_mem += m_stats->n_simt_to_mem[m_sid];
 	n_mem_to_simt += m_stats->n_mem_to_simt[m_sid];
@@ -3539,6 +3584,19 @@ void simt_core_cluster::get_TLB_sub_stats(struct cache_sub_stats &css) const{
     }
     css = total_css;
 }
+
+void simt_core_cluster::get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const{
+    struct cache_sub_stats temp_css;
+    struct cache_sub_stats total_css;
+    temp_css.clear();
+    total_css.clear();
+    for ( unsigned i = 0; i < m_config->n_simt_cores_per_cluster; ++i ) {
+        m_core[i]->get_SHARE_MMU_CACHE_sub_stats(temp_css);
+        total_css += temp_css;
+    }
+    css = total_css;
+}
+
 void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t, unsigned tid)
 {
     if( inst.has_callback(t) ) 

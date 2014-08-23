@@ -1235,9 +1235,12 @@ public:
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
     void get_TLB_sub_stats(struct cache_sub_stats &css) const;
+    void get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const;
 
     mmu_tlb_cache *get_mmuTLB(){return m_mmuTLB;}
     page_table_walker *get_ptw(){return m_ptw;}
+
+    void set_mmu_shared_cache(mmu_shared_cache* unit_mmu_shared_cache){m_mmu_shared_cache = unit_mmu_shared_cache;}
 protected:
     ldst_unit( mem_fetch_interface *icnt,
                shader_core_mem_fetch_allocator *mf_allocator,
@@ -1291,6 +1294,7 @@ protected:
 
    //yk: add mmu's TLB & L1 cache
    mmu_tlb_cache *m_mmuTLB;
+   mmu_shared_cache* m_mmu_shared_cache;
    page_table_walker *m_ptw;
 
    std::map<unsigned/*warp_id*/, std::map<unsigned/*regnum*/,unsigned/*count*/> > m_pending_writes;
@@ -1781,6 +1785,7 @@ public:
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
     void get_TLB_sub_stats(struct cache_sub_stats &css) const;
+    void get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const;
 
     void get_icnt_power_stats(long &n_simt_to_mem, long &n_mem_to_simt) const;
 
@@ -2034,6 +2039,7 @@ public:
     void get_L1C_sub_stats(struct cache_sub_stats &css) const;
     void get_L1T_sub_stats(struct cache_sub_stats &css) const;
     void get_TLB_sub_stats(struct cache_sub_stats &css) const;
+    void get_SHARE_MMU_CACHE_sub_stats(struct cache_sub_stats &css) const;
 
     void get_icnt_stats(long &n_simt_to_mem, long &n_mem_to_simt) const;
     shader_core_ctx* get_core(int index){return m_core[index];}

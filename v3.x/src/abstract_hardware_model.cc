@@ -35,8 +35,10 @@
 #include "gpgpu-sim/gpu-sim.h"
 #include "option_parser.h"
 #include <algorithm>
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
-unsigned mem_access_t::sm_next_access_uid = 0;   
+
+unsigned mem_access_t::sm_next_access_uid = 0;
 unsigned warp_inst_t::sm_next_uid = 0;
 
 
@@ -618,13 +620,37 @@ kernel_info_t::kernel_info_t( dim3 gridDim, dim3 blockDim, class function_info *
     m_uid = m_next_uid++;
     m_param_mem = new memory_space_impl<8192>("param",64*1024);
     m_scheduler_next_cta = m_next_cta;
+
+    //yk: should initialize bloom filter data structure
     m_schedule_strategy_on = false;
+    m_schedule_determine = false;
+    m_scheduler_policy = NONE;
+    count_selected_CTA = 0;
+    m_cluster_addr = NULL;
+    m_CTA_addr.clear();
+
+    total_touched_pages_cs = shader_touched_pages_cs = 0;
+    total_touched_pages_ns = shader_touched_pages_ns = 0;
 }
 
 kernel_info_t::~kernel_info_t()
 {
     assert( m_active_threads.empty() );
     delete m_param_mem;
+}
+
+void kernel_info_t::push_address_info(unsigned sid, new_addr_type addr ){
+    if(m_schedule_determine == false){
+        addr &= ~(0xfff);
+        m_CTA_addr.insert(addr);
+        m_cluster_addr[sid].insert(addr);
+    }
+    return;
+}
+
+void kernel_info_t::inc_count_selected_CTA(){
+    count_selected_CTA ++;
+    return;
 }
 
 void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,core_t *core )
@@ -636,12 +662,104 @@ void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,
     const shader_core_config & shader_config = core->get_gpu()->get_config().get_shader_config();
     const unsigned int total_core = shader_config.n_simt_cores_per_cluster * shader_config.n_simt_clusters;
 
+    if(m_cluster_addr == NULL){
+           m_cluster_addr = new std::set< new_addr_type >[ total_core ];
+    }
+
+    if( (policy == HINT_X || policy == HINT_Y) && (m_schedule_determine == false) ){
+        if(count_selected_CTA == MIN((m_grid_dim.x/8),total_core*3)){
+            if(m_schedule_strategy_on  == true){
+                m_schedule_determine = true;
+                // choose the better scheduling policy
+                //save previous address data info
+                total_touched_pages_ns = m_CTA_addr.size();
+                for(unsigned int index=0; index < total_core; index++){
+                     shader_touched_pages_ns += m_cluster_addr[index].size();
+                }
+
+                double page_ratio_cs = 0.0;
+                double page_ratio_ns = 0.0;
+
+                if(total_touched_pages_cs != 0 && total_touched_pages_ns !=0){
+                    page_ratio_cs = shader_touched_pages_cs / total_touched_pages_cs;
+                    page_ratio_ns = shader_touched_pages_ns / total_touched_pages_ns;
+                }
+                printf("shader_touched_pages_cs %d total_touched_pages_cs %d page_ratio_cs: %lf\n",shader_touched_pages_cs, total_touched_pages_cs,page_ratio_cs);
+                printf("shader_touched_pages_ns %d total_touched_pages_ns %d page_ratio_ns: %lf\n",shader_touched_pages_ns, total_touched_pages_ns,page_ratio_ns);
+                //if shader cores occupy less pages
+                if(page_ratio_ns <  page_ratio_cs){
+                    if(policy == HINT_X ){
+                        m_scheduler_policy = X_DIMENSION;
+                    }
+                    if(policy == HINT_Y ){
+                        m_scheduler_policy = Y_DIMENSION;
+                    }
+                }
+                // else, the hint is bad.
+                else{
+                    m_scheduler_policy = NONE;
+                }
+
+                printf("Finish determine\n");
+                printf("Select policy : %d\n",(int)m_scheduler_policy);
+            }
+
+            //save previous address data info
+            total_touched_pages_cs = m_CTA_addr.size();
+            m_CTA_addr.clear();
+            for(unsigned int index=0; index < total_core; index++){
+                shader_touched_pages_cs += m_cluster_addr[index].size();
+                m_cluster_addr[index].clear();
+            }
+
+            printf("Finish one line\n");
+            m_schedule_strategy_on = true;
+            count_selected_CTA = 0;
+        }
+        //count_selected_CTA ++;
+        //printf("m_grid_dim.x: %d count_selected_CTA: %d\n",m_grid_dim.x,count_selected_CTA);
+
+    }
+    else if((policy == HINT_X || policy == HINT_Y)){
+        if(m_schedule_strategy_on == true && m_schedule_determine == false){
+            if(policy == HINT_X ){
+                m_scheduler_policy = X_DIMENSION;
+            }
+            if(policy == HINT_Y ){
+                m_scheduler_policy = Y_DIMENSION;
+            }
+        }
+        else if(m_schedule_strategy_on == false && m_schedule_determine == false) {
+             m_scheduler_policy = NONE;
+        }
+    }
+
+    if(policy != HINT_X && policy != HINT_Y){
+        m_scheduler_policy = policy;
+    }
 
     //yk: use mask to choose the best block location
-    switch(policy){
+    switch( m_scheduler_policy ){
         case NONE:
-            m_scheduler_next_cta = m_next_cta;
-            return;
+            //m_scheduler_next_cta = m_next_cta;
+            posZ = 0;
+            //go through maks to find available block
+            count_step=0;
+            while( count_step != m_grid_dim.z ){
+                for(posY=0; posY < m_grid_dim.y; posY++){
+                    for(posX=0; posX < m_grid_dim.x; posX++){
+                        if(active_mask[posX][posY][posZ] == 0){
+                            m_scheduler_next_cta.x = posX;
+                            m_scheduler_next_cta.y = posY;
+                            m_scheduler_next_cta.z = posZ;
+                            active_mask[posX][posY][posZ] = 1;
+                            return;
+                        }
+                    }
+                }
+                posZ = ( posX+1 ) % m_grid_dim.z;
+                count_step++;
+            }
             break;
         case X_DIMENSION:
             posX = (m_grid_dim.x / total_core) * sid;
@@ -684,7 +802,10 @@ void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,
             }
             break;
         default:
+            printf("should select one method\n");
+            assert(0);
             m_scheduler_next_cta = m_next_cta;
+            active_mask[m_scheduler_next_cta.x][m_scheduler_next_cta.y][m_scheduler_next_cta.z] = 1;
             return;
     }
 

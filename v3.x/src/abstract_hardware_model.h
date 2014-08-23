@@ -139,7 +139,9 @@ enum page_index{
 enum scheduler_policy{
     NONE =0 ,
     X_DIMENSION = 1,
-    Y_DIMENSION =2
+    Y_DIMENSION =2,
+    HINT_X = 3,
+    HINT_Y = 4
 };
 
 #include <bitset>
@@ -149,6 +151,7 @@ enum scheduler_policy{
 #include <stdlib.h>
 #include <map>
 #include <deque>
+#include <set>
 
 #if !defined(__VECTOR_TYPES_H__)
 struct dim3 {
@@ -190,6 +193,19 @@ public:
     }
     bool *** active_mask;
     unsigned int lengthX,lengthY,lengthZ;
+};
+
+class bloom_filter_t{
+    public:
+    bloom_filter_t(){
+        miss = 0;
+    }
+    ~bloom_filter_t(){}
+
+    void push_addr(new_addr_type addr);
+
+
+    unsigned int miss;
 };
 
 void increment_x_then_y_then_z( dim3 &i, const dim3 &bound);
@@ -265,6 +281,12 @@ public:
 
    dim3 scheduler_get_next_cta_id() const { return m_scheduler_next_cta; }
    void scheduler_set_next_cta_id(int sid, scheduler_policy policy,core_t*);
+
+   // add bloom scheduler
+   void push_address_info(unsigned sid, new_addr_type addr );
+
+   void inc_count_selected_CTA();
+
 private:
    kernel_info_t( const kernel_info_t & ); // disable copy constructor
    void operator=( const kernel_info_t & ); // disable copy operator
@@ -291,6 +313,15 @@ private:
 
    //yk: add bloom filter
    bool m_schedule_strategy_on;
+   bool m_schedule_determine;
+   scheduler_policy m_scheduler_policy;
+   unsigned int count_selected_CTA;
+
+   std::set< new_addr_type > m_CTA_addr;
+   std::set< new_addr_type > *m_cluster_addr;
+
+   int total_touched_pages_cs, shader_touched_pages_cs;
+   int total_touched_pages_ns, shader_touched_pages_ns;
 };
 
 struct core_config {

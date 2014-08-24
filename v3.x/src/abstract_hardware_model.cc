@@ -667,7 +667,14 @@ void kernel_info_t::scheduler_set_next_cta_id( int sid, scheduler_policy policy,
     }
 
     if( (policy == HINT_X || policy == HINT_Y) && (m_schedule_determine == false) ){
-        if(count_selected_CTA == MIN((m_grid_dim.x/8),total_core*3)){
+        unsigned int sample_count;
+        if(policy == HINT_Y){
+            sample_count = MIN((m_grid_dim.y/8),total_core*3);
+        }
+        else{
+            sample_count = MIN((m_grid_dim.x/8),total_core*3);
+        }
+        if(count_selected_CTA == sample_count){
             if(m_schedule_strategy_on  == true){
                 m_schedule_determine = true;
                 // choose the better scheduling policy

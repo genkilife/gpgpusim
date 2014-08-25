@@ -136,14 +136,14 @@ int main(){
 
             // go through each group mapping
             for(int idx_map = 0; idx_map < g_shader_addr_map.size(); idx_map++ ){
-                unsigned int max_distance = Distance( &g_shader_addr_map[idx_map], u_center[0] );
+                unsigned int min_distance = Distance( &g_shader_addr_map[idx_map], u_center[0] );
                 int max_index = 0;
 
                 for(int cluster_id=1; cluster_id < cluster_size; cluster_id++){
                     unsigned int dis_tmp = Distance( &g_shader_addr_map[idx_map], u_center[ cluster_id ] );
                     // hope to find highly overlap
-                    if( max_distance <  dis_tmp ){
-                        max_distance =  dis_tmp;
+                    if( min_distance >  dis_tmp ){
+                        min_distance =  dis_tmp;
                         max_index = cluster_id;
                     }
                 }
@@ -208,13 +208,39 @@ int main(){
         }
 
 
-       printf("finish clustering\n");
-       for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
+        printf("finish clustering\n");
+
+        thread_info *thread_cluster = new thread_info[ cluster_size ];
+        for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
             thread_info* thread = &u_center[idx_cluster]->t_info;
+            thread_cluster[idx_cluster] = *thread;
             printf("cluster id: %2d  b.x: %5d b.y: %5d b.z: %5d t.x: %5d t.y: %5d t.z: %5d  cluster_access_num: %d\n",idx_cluster,
                     thread->b_x, thread->b_y, thread->b_z, thread->t_x, thread->t_y, thread->t_z, cluster_access_num[idx_cluster]);
-       }
+        }
 
+
+        // sort the cluster access num
+        printf("\nSort the cluster access num\n");
+        for(int loop_x=0; loop_x < cluster_size-1; loop_x ++){
+            for(int loop_y=0; loop_y < cluster_size-1; loop_y++){
+                if(cluster_access_num[loop_y] < cluster_access_num[loop_y+1]){
+                    //swap
+                    unsigned int tmp_uint = cluster_access_num[loop_y];
+                    cluster_access_num[loop_y] = cluster_access_num[loop_y+1];
+                    cluster_access_num[loop_y+1] = tmp_uint;
+
+
+                    thread_info tmp_thread = thread_cluster[loop_y];
+                    thread_cluster[loop_y] = thread_cluster[loop_y+1];
+                    thread_cluster[loop_y+1] = tmp_thread;
+                }
+            }
+        }
+        for(int idx_cluster=0; idx_cluster < cluster_size; idx_cluster++){
+            thread_info* thread = &thread_cluster[idx_cluster];
+            printf("cluster id: %2d  b.x: %5d b.y: %5d b.z: %5d t.x: %5d t.y: %5d t.z: %5d  cluster_access_num: %d\n",idx_cluster,
+                    thread->b_x, thread->b_y, thread->b_z, thread->t_x, thread->t_y, thread->t_z, cluster_access_num[idx_cluster]);
+        }
 
 	}
 	return 0;
@@ -227,7 +253,13 @@ unsigned int Distance(shader_addr_mapping* mapping_A,shader_addr_mapping* mappin
     unsigned int distance=0;
     unsigned int abs_diff;
     for(int index=0; index < mapping_A->access_cnt.size(); index++){
-        abs_diff = min( mapping_A->access_cnt[index], mapping_B->access_cnt[index]);
+//        abs_diff = min( mapping_A->access_cnt[index], mapping_B->access_cnt[index]);
+        if(mapping_A->access_cnt[index] < mapping_B->access_cnt[index]){
+            abs_diff = mapping_B->access_cnt[index] - mapping_A->access_cnt[index];
+        }
+        else{
+            abs_diff = mapping_A->access_cnt[index] - mapping_B->access_cnt[index];
+        }
         distance += abs_diff;
     }
     return distance;
